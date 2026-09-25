@@ -1,0 +1,4 @@
+# Kept in git, left out of the Comfy Registry package
+docs/
+.github/
+.gitattributes
