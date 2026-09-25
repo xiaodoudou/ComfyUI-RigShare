@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,{{ICON_B64}}">
+<title>Sign in · {{SERVER_NAME}}</title>
+<style>
+  :root {
+    --bg: #111214; --card: #1b1c1f; --fg: #e6e6e6; --muted: #9a9ca3; --border: #2e3036;
+    --input: #141518; --accent: #3b82f6; --accent-fg: #fff; --error: #f87171;
+  }
+  @media (prefers-color-scheme: light) {
+    :root { --bg: #f3f4f6; --card: #fff; --fg: #17181a; --muted: #6b6f76; --border: #dcdfe4; --input: #f8f9fb; }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 16px;
+    background: radial-gradient(1200px 600px at 50% -10%, color-mix(in srgb, var(--accent) 18%, transparent), transparent), var(--bg);
+    color: var(--fg); font: 14px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  .card {
+    width: 100%; max-width: 360px; background: var(--card); border: 1px solid var(--border);
+    border-radius: 14px; padding: 28px 24px 22px; box-shadow: 0 20px 60px rgb(0 0 0 / .25);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .logo { width: 34px; height: 34px; flex: none; }
+  .logo svg { width: 100%; height: 100%; display: block; }
+  h1 { font-size: 18px; margin: 0; }
+  p.sub { color: var(--muted); margin: 0 0 20px; font-size: 13px; }
+  label { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 5px; }
+  input {
+    width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--input); color: var(--fg); font: inherit;
+  }
+  input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 25%, transparent); }
+  button {
+    width: 100%; margin-top: 18px; padding: 10px; border: 0; border-radius: 8px;
+    background: var(--accent); color: var(--accent-fg); font: inherit; font-weight: 600; cursor: pointer;
+  }
+  button:disabled { opacity: .6; cursor: default; }
+  .error { color: var(--error); font-size: 13px; margin-top: 12px; min-height: 1em; }
+  .notice { font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-bottom: 4px;
+    background: color-mix(in srgb, var(--accent) 14%, transparent); border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent); }
+  .hint { color: var(--muted); font-size: 11.5px; margin-top: 6px; }
+  code { font-size: 11px; }
+  [hidden] { display: none !important; }
+  .foot { margin-top: 18px; color: var(--muted); font-size: 11.5px; text-align: center; }
+</style>
+<script>
+  // Colors of the ComfyUI palette last used in this browser (saved by the plugin).
+  try {
+    const t = JSON.parse(localStorage.getItem("rigshare.theme") || "null");
+    if (t) {
+      const map = { "--bg": "--bg-color", "--card": "--comfy-menu-bg", "--input": "--comfy-input-bg", "--fg": "--fg-color",
+        "--muted": "--descrip-text", "--border": "--border-color", "--accent": "--p-primary-color", "--accent-fg": "--p-primary-contrast-color" };
+      const root = document.documentElement.style;
+      for (const [ours, theirs] of Object.entries(map)) if (t[theirs]) root.setProperty(ours, t[theirs]);
+    }
+  } catch {}
+</script>
+</head>
+<body>
+<form class="card" id="form" autocomplete="on">
+  <div class="brand"><div class="logo">{{ICON_SVG}}</div><h1>{{SERVER_NAME}}</h1></div>
+  <p class="sub" id="sub">Sign in to open the shared ComfyUI workspace.</p>
+  <div class="notice" id="notice" hidden>Welcome! No account exists yet. Create the <b>administrator</b> account; you can add other users afterwards from the RigShare panel.</div>
+  <label for="u">Username</label>
+  <input id="u" name="username" autocomplete="username" required autofocus maxlength="32">
+  <label for="p">Password</label>
+  <input id="p" name="password" type="password" autocomplete="current-password" required>
+  <div id="setup-fields" hidden>
+    <label for="c">Confirm password</label>
+    <input id="c" name="confirm" type="password" autocomplete="new-password">
+    <div class="hint">At least 8 characters. Username: letters, digits, <code>_ . -</code></div>
+  </div>
+  <button id="b" type="submit">Sign in</button>
+  <div class="error" id="e" role="alert"></div>
+  <div class="foot" id="foot">No account? Ask an administrator.</div>
+</form>
+<script>
+  const SETUP = {{NEEDS_SETUP}};
+  const form = document.getElementById("form");
+  const err = document.getElementById("e");
+  const btn = document.getElementById("b");
+  const next = new URLSearchParams(location.search).get("next") || "/";
+  if (SETUP) {
+    document.title = "Set up · {{SERVER_NAME}}";
+    document.getElementById("sub").textContent = "First-time setup";
+    document.getElementById("notice").hidden = false;
+    document.getElementById("setup-fields").hidden = false;
+    document.getElementById("foot").hidden = true;
+    form.password.autocomplete = "new-password";
+    form.confirm.required = true;
+    btn.textContent = "Create admin account";
+  }
+  form.addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    err.textContent = "";
+    if (SETUP) {
+      if (form.password.value.length < 8) { err.textContent = "Password must be at least 8 characters"; return; }
+      if (form.password.value !== form.confirm.value) { err.textContent = "Passwords do not match"; return; }
+    }
+    btn.disabled = true;
+    try {
+      const res = await fetch(SETUP ? "/rigshare/api/setup" : "/rigshare/api/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: form.username.value.trim(), password: form.password.value }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 409) { location.reload(); return; } // someone finished setup meanwhile
+      if (!res.ok) throw new Error(data.error || "Sign in failed");
+      try { localStorage.setItem("rigshare.token", data.token); } catch {}
+      location.replace(next.startsWith("/") && !next.startsWith("//") ? next : "/");
+    } catch (e) {
+      err.textContent = e.message;
+      btn.disabled = false;
+      form.password.select();
+    }
+  });
+</script>
+</body>
+</html>
