@@ -13,6 +13,6 @@ Documentation = "https://github.com/xiaodoudou/ComfyUI-RigShare#documentation"
 "Bug Tracker" = "https://github.com/xiaodoudou/ComfyUI-RigShare/issues"
 
 [tool.comfy]
-PublisherId = ""
+PublisherId = "xiaodoudou"
 DisplayName = "ComfyUI RigShare"
 Icon = "https://raw.githubusercontent.com/xiaodoudou/ComfyUI-RigShare/master/web/rigshare/assets/icon.png"
