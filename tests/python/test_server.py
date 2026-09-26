@@ -368,3 +368,25 @@ def test_view_mode_in_presence(run):
             assert next(c for c in rig.hub.clients.values() if c.key == "alice").view == "app", "unknown views are ignored"
             await alice.close(); await boss.close()
     run(scenario())
+
+
+def test_listing_inside_a_shared_folder(run):
+    async def scenario():
+        async with rig_server() as rig:
+            await rig.setup_admin()
+            alice = await rig.add_user("alice", edit=True)
+            bob = await rig.add_user("bob", edit=True)
+            h = rig.http
+            await h.post(rig.url("/rigshare/api/workspace/mkdir"), json={"parent": "@shared", "name": "FaceSwap"}, headers=alice)
+            await h.post(rig.url("/rigshare/api/workspace/mkdir"), json={"parent": "shared/FaceSwap", "name": "old"}, headers=alice)
+
+            async def here(user, path):
+                r = await h.get(rig.url(f"/rigshare/api/workspace/list?path={path}"), headers=user)
+                return (await r.json()).get("shared_folder")
+
+            # The folder you are in, even deeper down, and whether you manage its access.
+            assert await here(alice, "shared/FaceSwap/old") == {"path": "shared/FaceSwap", "name": "FaceSwap", "owner": "alice",
+                                                               "restricted": False, "manage": True}
+            assert (await here(bob, "shared/FaceSwap"))["manage"] is False
+            assert await here(alice, "users/alice") is None
+    run(scenario())

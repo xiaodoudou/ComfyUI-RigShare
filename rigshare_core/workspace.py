@@ -252,7 +252,15 @@ class Workspace:
                 entries.append(self._entry(child, name, os.path.isdir(full), kind, key, perms))
             can_mkdir = role == "edit" and rel not in ("", "users", "shared")
         entries.sort(key=lambda e: (e["type"] != "folder", e["name"].lower()))
-        return {"path": rel, "role": role, "entries": entries, "can_mkdir": can_mkdir}
+        out = {"path": rel, "role": role, "entries": entries, "can_mkdir": can_mkdir}
+        # Inside a shared folder: which one, and whether this person manages its access.
+        area, folder = self.area(rel) if rel != "@shared" else (None, None)
+        if area == "shared":
+            meta = self.folders.get(folder) or {}
+            out["shared_folder"] = {"path": folder, "name": folder.split("/", 1)[1], "owner": meta.get("owner"),
+                                    "restricted": bool(meta.get("acl")),
+                                    "manage": self.can_manage(folder, kind, key, perms)}
+        return out
 
     def make_dir(self, parent, name, kind, key, perms):
         """New folder. In the Shared root it becomes a shared folder you own."""

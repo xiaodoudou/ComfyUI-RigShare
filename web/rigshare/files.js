@@ -161,7 +161,14 @@ export class FilesBrowser {
             h("button", { class: `rs-fb-crumb ${i === trail.length - 1 ? "current" : ""}`, onclick: () => this.go(c.path) },
                 c.icon ? h("i", { class: `pi ${c.icon}` }) : null, i === 0 && c.icon ? null : c.label),
         ]).filter(Boolean));
+        const shared = this.listing?.shared_folder;
         this.actions.replaceChildren(...[
+            // Inside a shared folder: its access list, like the 🔒 on its row one level up.
+            shared?.manage && this.mode === "browse" && this.accessEditor ? h("button", {
+                class: `rs-btn rs-btn-icon ${this.accessFor === shared.path ? "active" : ""}`,
+                title: `Who can open "${shared.name}"${shared.restricted ? " (restricted)" : ""}`,
+                onclick: () => { this.accessFor = this.accessFor === shared.path ? null : shared.path; this.render(); },
+            }, h("i", { class: `pi ${shared.restricted ? "pi-lock" : "pi-lock-open"}` })) : null,
             this.listing?.can_mkdir && this.mode !== "open" ? h("button", {
                 class: "rs-btn rs-btn-icon", title: this.path === SHARED ? "New shared folder" : "New folder",
                 onclick: () => this.newFolder(),
@@ -173,6 +180,14 @@ export class FilesBrowser {
 
     renderList() {
         const entries = (this.listing?.entries || []).filter((e) => !this.filter || e.name.toLowerCase().includes(this.filter));
+        // The access editor of the shared folder we are in shows above its content.
+        const here = this.listing?.shared_folder;
+        const top = here && this.accessFor === here.path && this.accessEditor
+            ? this.accessEditor(here.path, () => { this.accessFor = null; this.reload(); }) : null;
+        if (top) {
+            this.list.replaceChildren(top, ...entries.map((e) => this.row(e)));
+            return;
+        }
         if (!entries.length) {
             this.list.replaceChildren(h("div", { class: "rs-fb-empty" },
                 this.filter ? "Nothing matches." : this.path === `users/${this.me}` ? "Nothing here yet. Save a workflow and choose My files." : "This folder is empty."));

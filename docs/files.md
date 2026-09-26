@@ -35,7 +35,7 @@ Workflows saved as **Apps** (ComfyUI's App mode, `.app.json`) show with an app i
 
 Click a workflow to open it. The Files tab marks live workflows with a green dot. **From computer** opens a workflow file from your machine, like ComfyUI's own *Open*.
 
-Hover a row for its actions: **Rename**, **Move to…**, **Delete**, and on a shared folder you own, 🔒 **Who can open it**. The folder button creates a folder. In the Shared tab it creates a shared folder that you own.
+Hover a row for its actions: **Rename**, **Move to…**, **Delete**, and on a shared folder you own, 🔒 **Who can open it**. Inside a shared folder you own, the same 🔒 sits next to the new-folder button. The folder button creates a folder. In the Shared tab it creates a shared folder that you own.
 
 ## Saving
 
