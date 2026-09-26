@@ -5,7 +5,7 @@
 ### Added
 
 - App mode: live workflows work in ComfyUI's App view. Each person keeps their own graph or App view through live edits, and App inputs sync. Cursors are off in the App view. Workflows saved as Apps (`.app.json`) show with an app icon in Files and in the Live list, and Save keeps them Apps
-- In the App view, where ComfyUI shows only its own sidebar tabs, a small dock at the bottom left opens the RigShare panel and Files in a drawer, with the unread chat badge
+- In the App view, where ComfyUI shows only its own sidebar tabs, RigShare adds **RigShare** and **Files** buttons to that sidebar, with the unread chat badge. They open the panels in a drawer beside it
 - ComfyUI's own Workflows and Apps sidebar tabs are hidden, since Files replaces them, and their shortcuts open Files. Admin setting `hide_comfy_file_tabs`, on by default
 
 ## 1.1.0 (2026-09-26)

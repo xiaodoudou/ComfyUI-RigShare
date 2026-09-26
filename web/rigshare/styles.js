@@ -257,6 +257,8 @@ body.rs-no-manager [aria-label="ComfyUI Manager"] { display: none !important; }
   background: var(--rs-bg); border: 1px solid var(--rs-border); border-radius: 12px; box-shadow: 0 12px 40px rgb(0 0 0 / .45); overflow: hidden; }
 .rs-dock-drawer-body { height: 100%; }
 .rs-dock-drawer .rs-header { padding-right: 40px; }
+.rs-rail-badge { position: absolute; top: -4px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+  background: #ef4444; color: #fff; font-size: 10px; line-height: 16px; font-weight: 700; text-align: center; }
 .rs-dock-close { position: absolute; top: 8px; right: 8px; z-index: 2; border: 0; background: none; color: var(--rs-muted); cursor: pointer; padding: 4px; }
 .rs-dock-close:hover { color: var(--rs-fg); }
 .rs-cursor-layer { position: fixed; inset: 0; pointer-events: none; z-index: 900; overflow: hidden; }
