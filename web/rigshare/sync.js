@@ -95,8 +95,11 @@ export class RoomSync extends EventTarget {
         this.app = app;
         this.api = api;
         this.client = client;
-        this.autoShareFiles = true;
-        this.autoShareUnsaved = true;
+        this.autoShareFiles = false;
+        this.autoShareUnsaved = false;
+        this.loading = 0;       // a graph load (ours or ComfyUI's) is in progress
+        this.ownLoad = 0;       // the load in progress was started by RigShare
+        this.installLoadGuard();
         this.optedOut = new WeakSet(); // unsaved tabs the user chose to keep private
         this.seen = new WeakMap();      // unsaved tab -> nodes when first seen
         this.overrides = this.loadOverrides();
@@ -316,9 +319,11 @@ export class RoomSync extends EventTarget {
         const ds = this.app.canvas?.ds;
         if (keepView && ds) doc.extra = { ...(doc.extra || {}), ds: { scale: ds.scale, offset: [...ds.offset] } };
         this.applying++;
+        this.ownLoad++;
         try {
             await this.app.loadGraphData(doc, true, keepView, wf, { skipAssetScans: true, silentAssetErrors: true });
         } finally {
+            this.ownLoad--;
             this.applying--;
         }
         this.settle();
@@ -337,7 +342,7 @@ export class RoomSync extends EventTarget {
     // ----- local -> remote ------------------------------------------------
 
     checkLocal() {
-        if (!this.live || this.applying || !this.baseline || !this.client.online) return;
+        if (!this.live || this.applying || this.loading || !this.baseline || !this.client.online) return;
         if (this.store?.activeWorkflow !== this.targetWf) return;
         if (performance.now() < this.settleUntil) return;
         const snap = snapshotOf(this.serialize());
@@ -499,6 +504,43 @@ export class RoomSync extends EventTarget {
         this.tick();
     }
 
+    /**
+     * ComfyUI replaces the graph first and only then switches the active tab
+     * (opening a file, a template, drag-and-drop, switching tabs). Without a
+     * guard, that half-finished state looks like "someone replaced the whole
+     * shared workflow" and would be sent to the room of the old tab.
+     */
+    installLoadGuard() {
+        const app = this.app;
+        const original = app.loadGraphData.bind(app);
+        app.loadGraphData = async (graphData, ...rest) => {
+            const own = this.ownLoad > 0;
+            // Content coming from outside (a file from disk, a template, a paste)
+            // must not drag a RigShare room id along with it.
+            const target = rest[2];
+            if (!own && (target === undefined || target === null || typeof target === "string")
+                && graphData && typeof graphData === "object" && graphData.extra?.rigshare) {
+                graphData = { ...graphData, extra: { ...graphData.extra } };
+                delete graphData.extra.rigshare;
+            }
+            this.loading++;
+            try {
+                return await original(graphData, ...rest);
+            } finally {
+                this.loading--;
+                if (!own) {
+                    // Re-evaluate the tab on screen from scratch: rejoin its room
+                    // (the server copy wins) instead of diffing against the old tab.
+                    this.baseline = null;
+                    this.ready = false;
+                    this.targetKey = undefined;
+                    this.settleUntil = performance.now() + 1500;
+                    setTimeout(() => this.tick(), 50);
+                }
+            }
+        };
+    }
+
     /** Find an already-open tab for a room. */
     findTab(room) {
         for (const wf of this.store?.openWorkflows || []) {
@@ -525,13 +567,23 @@ export class RoomSync extends EventTarget {
             if (wf && !wf.isLoaded) await wf.load();
         }
         if (wf) {
-            await this.app.loadGraphData(data.doc ?? wf.activeState, true, true, wf);
+            this.ownLoad++;
+            try {
+                await this.app.loadGraphData(data.doc ?? wf.activeState, true, true, wf);
+            } finally {
+                this.ownLoad--;
+            }
         } else {
             // Unsaved shared tab (or a file that no longer exists): open a
             // temporary tab carrying the room id.
             const doc = structuredClone(data.doc || {});
             doc.extra = { ...(doc.extra || {}), rigshare: { room: room.key } };
-            await this.app.loadGraphData(doc, true, true, `${room.name}.json`);
+            this.ownLoad++;
+            try {
+                await this.app.loadGraphData(doc, true, true, `${room.name}.json`);
+            } finally {
+                this.ownLoad--;
+            }
         }
         this.tick();
     }

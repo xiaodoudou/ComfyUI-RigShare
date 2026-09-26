@@ -156,7 +156,7 @@ app.registerExtension({
             category: ["RigShare", "Sharing", "ShareSaved"],
             name: "Share saved workflows automatically (everyone opening the same file edits it together)",
             type: "boolean",
-            defaultValue: true,
+            defaultValue: false,
             onChange: (v) => { if (rig) rig.sync.autoShareFiles = v; },
         },
         {
@@ -164,7 +164,7 @@ app.registerExtension({
             category: ["RigShare", "Sharing", "ShareUnsaved"],
             name: "Share unsaved tabs automatically once they contain nodes",
             type: "boolean",
-            defaultValue: true,
+            defaultValue: false,
             onChange: (v) => { if (rig) rig.sync.autoShareUnsaved = v; },
         },
         {
@@ -230,8 +230,8 @@ app.registerExtension({
         rig = { client, sync, presence, panel };
         window.rigshare = rig; // handy for debugging from the console
 
-        sync.autoShareFiles = setting("RigShare.ShareSaved", true);
-        sync.autoShareUnsaved = setting("RigShare.ShareUnsaved", true);
+        sync.autoShareFiles = setting("RigShare.ShareSaved", false);
+        sync.autoShareUnsaved = setting("RigShare.ShareUnsaved", false);
         presence.showCursors = setting("RigShare.ShowCursors", true);
         presence.showNames = setting("RigShare.ShowCursorNames", true);
         panel.chatToasts = setting("RigShare.ChatToasts", false);
