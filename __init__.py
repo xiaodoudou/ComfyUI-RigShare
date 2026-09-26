@@ -1,17 +1,15 @@
 import logging
 import os
 
-import folder_paths
-from server import PromptServer
-
-from .rigshare_core.store import Store
-from .rigshare_core.hub import Hub
-from .rigshare_core.workspace import Workspace
-from .rigshare_core import routes
-
 NODE_CLASS_MAPPINGS = {}
 NODE_DISPLAY_NAME_MAPPINGS = {}
 WEB_DIRECTORY = "./web"
+
+try:
+    import folder_paths
+    from server import PromptServer
+except ImportError:  # imported outside ComfyUI, e.g. by the test runner
+    folder_paths = PromptServer = None
 
 
 def data_folder():
@@ -27,8 +25,13 @@ def workflows_dir():
     return os.path.join(user_root or os.path.join(folder_paths.get_user_directory(), "default"), "workflows")
 
 
-if hasattr(PromptServer, "instance"):
+if PromptServer is not None and hasattr(PromptServer, "instance"):
     try:
+        from .rigshare_core.store import Store
+        from .rigshare_core.hub import Hub
+        from .rigshare_core.workspace import Workspace
+        from .rigshare_core import routes
+
         folder = data_folder()
         os.makedirs(folder, exist_ok=True)
         store = Store(folder)

@@ -16,3 +16,6 @@ Documentation = "https://github.com/xiaodoudou/ComfyUI-RigShare#documentation"
 PublisherId = "xiaodoudou"
 DisplayName = "ComfyUI RigShare"
 Icon = "https://raw.githubusercontent.com/xiaodoudou/ComfyUI-RigShare/master/web/rigshare/assets/icon.png"
+
+[tool.pytest.ini_options]
+testpaths = ["tests/python"]

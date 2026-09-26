@@ -1,0 +1,23 @@
+name: Tests
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: Python and JavaScript tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: "22"
+      - name: Install test dependencies
+        run: pip install pytest aiohttp
+      - name: Python tests
+        run: python -m pytest -q
+      - name: JavaScript tests
+        run: node --test "tests/js/*.test.mjs"

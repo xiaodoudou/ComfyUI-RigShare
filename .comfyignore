@@ -2,3 +2,4 @@
 docs/
 .github/
 .gitattributes
+tests/

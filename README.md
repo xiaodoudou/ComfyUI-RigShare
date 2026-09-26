@@ -96,6 +96,7 @@ Behind a reverse proxy, turn on WebSocket support, or nothing will be live. See 
 | [Settings](docs/settings.md) | Panel settings, ComfyUI settings, every key in `config.json` |
 | [Reverse proxy](docs/reverse-proxy.md) | Nginx Proxy Manager, plain nginx, HTTPS |
 | [Security](docs/security.md) | How passwords, sessions and keys are protected |
+| [Development](docs/development.md) | Running the tests, code layout |
 | [Changelog](CHANGELOG.md) | What changed, and when |
 
 ## Why this exists
