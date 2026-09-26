@@ -42,7 +42,7 @@ Viewers (no *Edit* permission) see a read-only canvas. Anything they change loca
 
 ## Who can open it
 
-Access follows the folder, not the workflow. To keep a workflow to some people, put it in a shared folder and restrict the folder: in the Files tab (🔒 on the folder), or with **Folder access** under *This tab* when the workflow on screen is in a folder you own. Choose *Only people I choose* and give each person **Can view** or **Can edit**.
+Access follows the folder, not the workflow. To keep a workflow to some people, put it in a shared folder and restrict the folder in the Files tab (🔒 on the folder). *This tab* shows whether the workflow on screen is in a restricted folder. Choose *Only people I choose* and give each person **Can view** or **Can edit**.
 
 - Workflows at the top level of Shared (not in a folder) can be opened by everyone with an account, with their usual permissions.
 - The folder's owner (whoever created it) and admins always have access.
