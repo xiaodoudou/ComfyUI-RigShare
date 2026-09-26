@@ -444,8 +444,11 @@ class Store:
                 items.append({"id": name[:-5], **meta})
         return items
 
-    def add_snapshot(self, doc, author, room, room_name, label=None):
-        snap_id = time.strftime("%Y%m%d-%H%M%S") + "-" + secrets.token_hex(2)
+    def add_snapshot(self, doc, author, room, room_name, label=None, kind=None):
+        """``kind`` "save": taken when the file was saved; those rotate like automatic ones."""
+        # Sorted by name, newest first: include microseconds so saves in the same second keep their order.
+        now = time.time()
+        snap_id = time.strftime("%Y%m%d-%H%M%S", time.localtime(now)) + f"-{int(now % 1 * 1e6):06d}-" + secrets.token_hex(2)
         meta = {
             "time": int(time.time()),
             "author": author,
@@ -454,6 +457,8 @@ class Store:
             "room_name": room_name,
             "nodes": len(doc.get("nodes", [])) if isinstance(doc, dict) else 0,
         }
+        if kind:
+            meta["kind"] = kind
         with open(os.path.join(self.snapshot_dir, snap_id + ".json"), "w", encoding="utf-8") as f:
             json.dump({"meta": meta, "doc": doc}, f)
         self._prune_snapshots(room)
@@ -470,9 +475,11 @@ class Store:
 
     def _prune_snapshots(self, room):
         keep = max(1, int(self.config.get("snapshot_keep", 30)))
-        # Labelled (manual) snapshots are kept; only automatic ones rotate.
-        auto = [s for s in self.list_snapshots(room) if not s.get("label")]
-        for snap in auto[keep:]:
+        # Named (manual) snapshots are kept; automatic and on-save ones rotate, each on its own.
+        snaps = self.list_snapshots(room)
+        auto = [s for s in snaps if not s.get("label") and not s.get("kind")]
+        saves = [s for s in snaps if s.get("kind") == "save"]
+        for snap in auto[keep:] + saves[keep:]:
             try:
                 os.remove(os.path.join(self.snapshot_dir, snap["id"] + ".json"))
             except OSError:

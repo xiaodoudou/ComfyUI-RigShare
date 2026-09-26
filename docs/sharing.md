@@ -56,6 +56,7 @@ Saved workflow files still show up by name in ComfyUI's workflow browser; openin
 ## Snapshots
 
 - Automatic every 5 minutes while a workflow is being edited (`snapshot_interval_sec`). The last 30 are kept (`snapshot_keep`).
+- On every save, by anyone, of any workflow: named *Saved at* and the time, shown in your own time zone. The last 30 are kept too.
 - **Snapshot** saves a named one, which is never rotated out.
 - **History** lists them. ↗ opens a private copy; ⟲ restores it for everyone, after first saving the current state as a snapshot.
 

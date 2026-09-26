@@ -1,14 +1,28 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 (2026-09-26)
+
+ComfyUI's App mode works with RigShare, and every save keeps a snapshot.
 
 ### Added
 
-- App mode: live workflows work in ComfyUI's App view. Each person keeps their own graph or App view through live edits, and App inputs sync. Cursors are off in the App view. Workflows saved as Apps (`.app.json`) show with an app icon in Files and in the Live list, and Save keeps them Apps
-- In the App view, where ComfyUI shows only its own sidebar tabs, RigShare adds **RigShare** and **Files** buttons to that sidebar, with the unread chat badge. They open the panels in a drawer beside it
+- **App mode**: live workflows work in ComfyUI's App view. Each person keeps their own graph or App view through live edits, App inputs sync, and the app's layout (chosen inputs and outputs) syncs with the workflow. Cursors are off in the App view
+- In the App view, where ComfyUI shows only its own sidebar tabs, **RigShare** and **Files** buttons join that sidebar, with the unread chat badge, and open the panels in a drawer beside it
 - The Live tab and People show whether each person is in the node graph or the App view, with ComfyUI's own Graph and App icons
-- Folder access is managed only in the Files tab. *This tab* in the Live tab still says whether the folder is restricted. Inside a shared folder you own, its 🔒 sits next to the new-folder button
-- ComfyUI's own Workflows and Apps sidebar tabs are hidden, since Files replaces them, and their shortcuts open Files. Admin setting `hide_comfy_file_tabs`, on by default
+- Workflows with an App set up, and workflows saved as Apps (`.app.json`), show ComfyUI's App icon in Files and the Live list. Save keeps an App an App
+- **A snapshot on every save**, named *Saved at* and the time (in each viewer's time zone). They rotate like automatic snapshots (`snapshot_keep`)
+- Inside a shared folder you own, its 🔒 access button sits next to the new-folder button
+
+### Changed
+
+- ComfyUI's own Workflows and Apps sidebar tabs are hidden, since Files replaces them, and their shortcuts open Files. Admin setting `hide_comfy_file_tabs`, on by default. The server enforces file permissions either way
+- Folder access is managed only in the Files tab. *This tab* in the Live tab still says whether the folder is restricted
+- Smaller icons in folder lists
+
+### Fixed
+
+- In the Save and Move dialogs, **New folder** asked for the name in a prompt hidden behind the dialog
+- Snapshots taken in the same second could be rotated out of order
 
 ## 1.1.0 (2026-09-26)
 

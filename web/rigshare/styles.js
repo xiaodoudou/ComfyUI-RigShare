@@ -264,8 +264,8 @@ body.rs-no-manager [aria-label="ComfyUI Manager"] { display: none !important; }
 .rs-view-avatar { position: relative; overflow: visible; }
 .rs-comfy-icon { display: inline-block; width: 1em; height: 1em; flex: none; }
 .rs-view-mark { position: absolute; right: -6px; bottom: -5px; font-size: 8px; width: 13px; height: 13px; display: grid; place-items: center;
-  border-radius: 50%; background: var(--rs-bg); color: var(--rs-muted); border: 1px solid var(--rs-border); }
-.rs-view-app .rs-view-mark { color: var(--rs-accent-fg); background: var(--rs-accent); border-color: var(--rs-accent); }
+  border-radius: 50%; background: #71717a; color: #fff; border: 1.5px solid var(--rs-bg); }
+.rs-view-app .rs-view-mark { color: var(--rs-accent-fg); background: var(--rs-accent); }
 .rs-view-chip { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; font-size: 10.5px; padding: 0 6px; }
 .rs-view-chip .rs-comfy-icon { font-size: 11px; }
 .rs-view-chip.rs-view-app { color: var(--rs-accent); border-color: var(--rs-accent); }

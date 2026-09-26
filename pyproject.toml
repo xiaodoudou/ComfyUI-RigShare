@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-rigshare"
 description = "Multi-user collaboration for ComfyUI: accounts and login, live-shared workflows, cursors, chat, snapshots and a server monitor."
-version = "1.1.0"
+version = "1.2.0"
 license = { file = "LICENSE" }
 dependencies = []
 

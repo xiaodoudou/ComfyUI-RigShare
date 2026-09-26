@@ -609,6 +609,20 @@ def setup(server, store, hub):
         action = {"GET": "get", "HEAD": "get", "POST": "save", "DELETE": "delete"}.get(request.method)
         return (action, src, None) if action else None
 
+    def snapshot_saved_file(request, path, body):
+        if not path.endswith(".json") or Workspace.workflows_rel(path) is None:
+            return
+        try:
+            doc = json.loads(body)
+        except ValueError:
+            return
+        if not isinstance(doc, dict) or "nodes" not in doc:
+            return
+        name = path.rsplit("/", 1)[-1].removesuffix(".json").removesuffix(".app")
+        # The panel shows the time in each viewer's own time zone; the label is for API clients.
+        label = "Saved at " + time.strftime("%Y-%m-%d %H:%M UTC", time.gmtime())
+        store.add_snapshot(doc, display(request), "file:" + path, name, label, kind="save")
+
     def check_userdata(request, action, src, dest):
         """Folder rules (private spaces, restricted shared folders)."""
         kind, key, perms = who(request)
@@ -705,7 +719,12 @@ def setup(server, store, hub):
                                        "details": "", "extra_info": {}}, "node_errors": {}},
                             status=403)
                     break
+        if userdata and userdata[0] == "save":
+            await request.read()  # keep the body for the snapshot below (aiohttp caches it)
         response = await handler(request)
+        # Every save of a workflow keeps a snapshot, named after when it was saved.
+        if userdata and userdata[0] == "save" and getattr(response, "status", 0) == 200:
+            snapshot_saved_file(request, userdata[1], await request.read())
         # Workflow listings only show what this person may open.
         if userdata and userdata[0] == "list" and not trusted(request.remote or "") and hub.workspace:
             response = filter_listing(request, response, userdata[1])

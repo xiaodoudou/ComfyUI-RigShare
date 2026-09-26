@@ -16,6 +16,14 @@ const VIEWS = [
     { id: "admin", icon: "pi-shield", label: "Admin", admin: true },
 ];
 
+/** A snapshot's name; on-save ones show the save time in the viewer's own time zone. */
+function snapLabel(snap) {
+    if (snap.kind === "save") {
+        return `Saved at ${new Date(snap.time * 1000).toLocaleString([], { dateStyle: "short", timeStyle: "short" })}`;
+    }
+    return snap.label || "Auto";
+}
+
 export class RigSharePanel {
     constructor(app, client, sync, presence) {
         this.app = app;
@@ -348,12 +356,12 @@ export class RigSharePanel {
         }
         this.historyEl.replaceChildren(...snaps.map((snap) => h("div", { class: "rs-row-item" },
             h("div", { class: "rs-grow rs-min0" },
-                h("div", { class: "rs-ellipsis" }, snap.label || "Auto", h("span", { class: "rs-muted" }, ` · ${snap.nodes} nodes`)),
+                h("div", { class: "rs-ellipsis" }, snapLabel(snap), h("span", { class: "rs-muted" }, ` · ${snap.nodes} nodes`)),
                 h("div", { class: "rs-muted rs-small" }, `${timeAgo(snap.time * 1000)} · ${snap.author}`)),
             h("button", { class: "rs-btn rs-btn-icon", title: "Open a private copy", onclick: () => this.openSnapshot(snap) }, h("i", { class: "pi pi-external-link" })),
             this.sync.canEdit ? h("button", {
                 class: "rs-btn rs-btn-icon", title: "Restore for everyone", onclick: async () => {
-                    if (!(await this.confirm("Restore snapshot", `Restore "${snap.label || "Auto"}" for everyone in this workflow?`))) return;
+                    if (!(await this.confirm("Restore snapshot", `Restore "${snapLabel(snap)}" for everyone in this workflow?`))) return;
                     await this.run(() => this.client.request("POST", `/rigshare/api/snapshots/${snap.id}/restore`), "Snapshot restored");
                     this.loadHistory();
                 },
@@ -365,7 +373,7 @@ export class RigSharePanel {
         if (!data) return;
         const doc = structuredClone(data.doc);
         if (doc.extra) delete doc.extra.rigshare; // a private copy, not the live room
-        await this.app.loadGraphData(doc, true, true, `${snap.room_name || "Snapshot"} (${snap.label || snap.id}).json`);
+        await this.app.loadGraphData(doc, true, true, `${snap.room_name || "Snapshot"} (${snapLabel(snap).replace(/[\/:]/g, "-")}).json`);
     }
 
     /** Small avatar marked with how that person views the workflow: node graph or App. */

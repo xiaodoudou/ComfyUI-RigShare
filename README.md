@@ -26,7 +26,8 @@ A custom node that turns a single ComfyUI server into a shared workspace. Everyo
 - shows who is online and which workflow they are on, plus live cursors and selections
 - lets you follow someone, jumping to their tab and view
 - keeps the whole chat history, loading older messages as you scroll up, with an unread badge, a blinking icon and a sound
-- keeps per-workflow history: snapshots every few minutes, named snapshots, one-click restore
+- keeps per-workflow history: a snapshot on every save and every few minutes, named snapshots, one-click restore
+- works in ComfyUI's App mode: everyone picks their own graph or App view, App inputs sync live, and you can see who is in which view
 - gives each account permissions to edit, queue, use ComfyUI Manager or administer, enforced by the server and not just hidden in the UI
 - keeps simultaneous edits apart: two people adding or connecting nodes at the same moment both keep their work
 - issues personal API keys, so scripts and other apps can call ComfyUI with their owner's permissions

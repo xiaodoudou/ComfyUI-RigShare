@@ -249,6 +249,8 @@ export class FilesBrowser {
     // ----- actions ----------------------------------------------------------
 
     async ask(title, message, value = "") {
+        // Inside the Save / Move / Open dialogs ComfyUI's own prompt would open underneath.
+        if (this.mode !== "browse") return await promptModal(title, message, value);
         const dialog = this.app.extensionManager?.dialog;
         if (dialog?.prompt) return await dialog.prompt({ title, message, defaultValue: value });
         return window.prompt(message, value);
@@ -331,7 +333,13 @@ export function modal(title, icon, body, footer) {
         document.removeEventListener("keydown", onKey, true);
         resolveClose(value);
     };
-    const onKey = (e) => { if (e.key === "Escape" && backdrop.isConnected) { e.stopPropagation(); close(null); } };
+    // Stacked modals (a prompt over the Save dialog): Escape closes only the top one.
+    const onKey = (e) => {
+        if (e.key !== "Escape" || !backdrop.isConnected) return;
+        if ([...document.querySelectorAll(".rs-modal-backdrop")].at(-1) !== backdrop) return;
+        e.stopPropagation();
+        close(null);
+    };
     const backdrop = h("div", { class: "rs-modal-backdrop rs-panel-vars", onmousedown: (e) => { if (e.target === backdrop) close(null); } },
         h("div", { class: "rs-modal rs-modal-wide", role: "dialog", "aria-label": title },
             h("div", { class: "rs-modal-title" }, h("i", { class: `pi ${icon}` }), h("span", { class: "rs-grow" }, title),
@@ -342,6 +350,19 @@ export function modal(title, icon, body, footer) {
     document.body.append(backdrop);
     document.addEventListener("keydown", onKey, true);
     return { close, closed };
+}
+
+/** A text prompt in RigShare's own modal, so it stacks above another RigShare modal. */
+export async function promptModal(title, message, value = "") {
+    const input = h("input", { class: "rs-input", value, maxLength: 120 });
+    const ok = h("button", { class: "rs-btn rs-btn-primary" }, "OK");
+    const m = modal(title, "pi-pencil", h("div", { class: "rs-save-body" }, h("label", { class: "rs-label" }, message), input),
+        [h("span", { class: "rs-grow" }), h("button", { class: "rs-btn rs-btn-ghost", onclick: () => m.close(null) }, "Cancel"), ok]);
+    const submit = () => m.close(input.value);
+    ok.onclick = submit;
+    input.addEventListener("keydown", (e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); submit(); } });
+    setTimeout(() => { input.focus(); input.select(); }, 30);
+    return await m.closed;
 }
 
 /** Folder picker; resolves to a folder path ("" = common top level) or null. */

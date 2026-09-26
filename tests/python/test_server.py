@@ -418,3 +418,25 @@ def test_workflows_with_an_app_set_up(run):
             assert presence["rooms"][0]["app"] is True
             await sock.close()
     run(scenario())
+
+
+def test_every_save_keeps_a_snapshot(run):
+    async def scenario():
+        async with rig_server({"snapshot_keep": 2}) as rig:
+            await rig.setup_admin()
+            alice = await rig.add_user("alice", edit=True)
+            h = rig.http
+            path = "workflows/shared/flow.json"
+            for n in range(3):
+                doc = json.dumps({"nodes": [{"id": i} for i in range(n + 1)], "links": []}).encode()
+                assert (await h.post(rig.url(f"/api/userdata/{enc(path)}"), data=doc, headers=alice)).status == 200
+            await h.post(rig.url(f"/api/userdata/{enc('workflows/notes.json')}"), data=b'{"not": "a workflow"}', headers=alice)
+            snaps = await (await h.get(rig.url(f"/rigshare/api/snapshots?room={enc('file:' + path)}"), headers=alice)).json()
+            assert [s["nodes"] for s in snaps] == [3, 2], "newest first, rotated to snapshot_keep"
+            assert all(s["kind"] == "save" and s["label"].startswith("Saved at ") and s["author"] == "alice" for s in snaps)
+            assert not rig.store.list_snapshots("file:workflows/notes.json"), "only workflows"
+            # A save that is refused keeps nothing.
+            viewer = await rig.add_user("viewer")
+            await h.post(rig.url(f"/api/userdata/{enc(path)}"), data=b'{"nodes": []}', headers=viewer)
+            assert len(rig.store.list_snapshots("file:" + path)) == 2
+    run(scenario())
