@@ -1,0 +1,64 @@
+name: Update registry changelogs
+# Fills in the Comfy Registry changelog of versions already published, from the
+# matching CHANGELOG.md sections. Run it by hand (Actions -> Run workflow).
+on:
+  workflow_dispatch:
+    inputs:
+      versions:
+        description: "Versions to update, space separated (empty: every version in CHANGELOG.md)"
+        required: false
+        default: ""
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Update changelogs
+        env:
+          # The registry's edit endpoint takes a registry account key; the publishing
+          # token is tried when no REGISTRY_UPDATE_TOKEN secret is set.
+          TOKEN: ${{ secrets.REGISTRY_UPDATE_TOKEN || secrets.REGISTRY_ACCESS_TOKEN }}
+          VERSIONS: ${{ inputs.versions }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re, sys, urllib.error, urllib.request
+
+          API = "https://api.comfy.org"
+          publisher = re.search(r'^PublisherId\s*=\s*"([^"]+)"', open("pyproject.toml").read(), re.M).group(1)
+          node = re.search(r'^name\s*=\s*"([^"]+)"', open("pyproject.toml").read(), re.M).group(1)
+
+          sections, current = {}, None
+          for line in open("CHANGELOG.md", encoding="utf-8").read().splitlines():
+              m = re.match(r"^## (\d+\.\d+\.\d+)\b", line)
+              if m:
+                  current = m.group(1)
+                  sections[current] = []
+              elif line.startswith("## "):
+                  current = None
+              elif current:
+                  sections[current].append(line)
+          notes = {v: "\n".join(lines).strip() for v, lines in sections.items()}
+
+          with urllib.request.urlopen(f"{API}/nodes/{node}/versions") as r:
+              published = json.load(r)
+          ids = {v["version"]: v["id"] for v in published}
+          wanted = os.environ.get("VERSIONS", "").split() or sorted(notes)
+
+          failed = False
+          for version in wanted:
+              if version not in ids or not notes.get(version):
+                  print(f"skip {version}: {'not published' if version not in ids else 'no CHANGELOG section'}")
+                  continue
+              req = urllib.request.Request(
+                  f"{API}/publishers/{publisher}/nodes/{node}/versions/{ids[version]}",
+                  data=json.dumps({"changelog": notes[version]}).encode(), method="PUT",
+                  headers={"Content-Type": "application/json", "Authorization": f"Bearer {os.environ['TOKEN']}"})
+              try:
+                  with urllib.request.urlopen(req) as r:
+                      print(f"updated {version}: HTTP {r.status}")
+              except urllib.error.HTTPError as e:
+                  failed = True
+                  print(f"::error::{version}: HTTP {e.code} {e.read()[:300]!r}")
+          sys.exit(1 if failed else 0)
+          PY
