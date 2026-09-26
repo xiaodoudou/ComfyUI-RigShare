@@ -283,7 +283,8 @@ class Hub:
                 out.append({"key": room.key, "name": room.name, "kind": room.kind, "version": room.version,
                             "updated": int(room.updated), "members": members,
                             "nodes": len((room.doc or {}).get("nodes") or []),
-                            "restricted": self.folder_restricted(self.folder_of(room))})
+                            "restricted": self.folder_restricted(self.folder_of(room)),
+                            "app": room.key.endswith(".app.json")})
         out.sort(key=lambda r: (-len(r["members"]), -r["updated"]))
         return out
 
@@ -318,7 +319,7 @@ class Hub:
                 room.key = new_prefix + key[len(old_prefix):]
                 if not is_live_key(room.key):
                     continue  # moved into a private folder: no longer live
-                room.name = room.key.rsplit("/", 1)[-1].removesuffix(".json")
+                room.name = room.key.rsplit("/", 1)[-1].removesuffix(".json").removesuffix(".app")
                 room.dirty = True
                 self.rooms[room.key] = room
                 moved.append(room.key)
@@ -373,6 +374,7 @@ class Hub:
         cfg = self.store.config
         return {"name": cfg.get("server_name"), "allow_guests": cfg.get("allow_guests"),
                 "hide_comfy_account": bool(cfg.get("hide_comfy_account")),
+                "hide_comfy_file_tabs": bool(cfg.get("hide_comfy_file_tabs", True)),
                 "hide_api_templates": bool(cfg.get("hide_api_templates"))}
 
     async def broadcast_server(self):

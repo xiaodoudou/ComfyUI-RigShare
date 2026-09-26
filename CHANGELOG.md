@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- App mode: live workflows work in ComfyUI's App view. Each person keeps their own graph or App view through live edits, and App inputs sync. Cursors are off in the App view. Workflows saved as Apps (`.app.json`) show with an app icon in Files and in the Live list, and Save keeps them Apps
+- ComfyUI's own Workflows and Apps sidebar tabs are hidden, since Files replaces them, and their shortcuts open Files. Admin setting `hide_comfy_file_tabs`, on by default
+
 ## 1.1.0 (2026-09-26)
 
 Workflows now live in folders, like a shared drive, and sharing follows them.

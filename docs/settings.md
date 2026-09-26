@@ -27,6 +27,7 @@ Admins change these under **Admin → Server settings**. They are stored in `rig
 | `guest_permissions` | `{"edit": false, "queue": false}` | What guests may do |
 | `broadcast_execution` | `true` | Send progress and previews to everyone, not only whoever queued |
 | `hide_comfy_account` | `false` | Hide ComfyUI's Comfy.org sign-in button and dialog |
+| `hide_comfy_file_tabs` | `true` | Hide ComfyUI's own Workflows and Apps sidebar tabs; RigShare's Files tab replaces them and their shortcuts open it |
 | `hide_api_templates` | `false` | Remove templates that need paid API nodes from the template browser |
 | `api_protection.enabled` | `true` | Server-side checks on queue, interrupt, free and upload calls |
 | `api_protection.trusted_ips` | `["127.0.0.1", "::1"]` | Addresses or networks that skip login and checks |

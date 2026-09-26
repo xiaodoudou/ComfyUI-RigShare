@@ -193,8 +193,9 @@ class Workspace:
 
     def _entry(self, rel, name, is_dir, kind, key, perms):
         full = self._abs(rel)
+        is_app = not is_dir and name.endswith(".app.json")  # saved as an App (ComfyUI App mode)
         entry = {"type": "folder" if is_dir else "file", "path": rel,
-                 "name": name if is_dir else name[:-5],
+                 "name": name if is_dir else name[:-9] if is_app else name[:-5],
                  "modified": int(os.path.getmtime(full)) if os.path.exists(full) else 0,
                  "role": self.role(rel, kind, key, perms)}
         area, folder = self.area(rel)
@@ -202,6 +203,8 @@ class Workspace:
             meta = self.folders.get(folder) or {}
             entry.update(owner=meta.get("owner"), restricted=bool(meta.get("acl")),
                          manage=self.can_manage(folder, kind, key, perms))
+        if is_app:
+            entry["app"] = True
         entry["deletable"] = self.can_delete(rel, kind, key, perms)
         return entry
 

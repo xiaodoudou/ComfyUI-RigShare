@@ -93,6 +93,45 @@ function installComfyAccountGuard(client) {
     setTimeout(apply, 2000);
 }
 
+// ComfyUI's Workflows and Apps sidebar tabs browse the same files as RigShare's
+// Files tab, without its folders. The server enforces permissions either way;
+// hiding them avoids two file browsers and buttons the server would refuse.
+const COMFY_FILE_TABS = ["workflows", "apps"];
+function installFileTabsGuard(client) {
+    const removed = new Map();
+    const manager = () => app.extensionManager;
+    const tabs = () => manager()?.getSidebarTabs?.() ?? manager()?.sidebarTab?.sidebarTabs ?? [];
+    const hidden = () => client.server?.hide_comfy_file_tabs !== false;
+    const openFiles = () => manager()?.command?.execute("Workspace.ToggleSidebarTab.rigshare-files");
+    const apply = () => {
+        if (!client.server) return; // wait for the server's settings
+        const hide = hidden();
+        for (const id of COMFY_FILE_TABS) {
+            const tab = tabs().find((t) => t.id === id);
+            // Open workflow tabs can be shown in the Workflows sidebar tab: keep it then.
+            const needed = id === "workflows" && setting("Comfy.Workflow.WorkflowTabsPosition", "Topbar") === "Sidebar";
+            if (hide && tab && !needed) {
+                removed.set(id, tab);
+                (manager().unregisterSidebarTab ?? manager().sidebarTab.unregisterSidebarTab)(id);
+            } else if ((!hide || needed) && !tab && removed.has(id)) {
+                manager().registerSidebarTab(removed.get(id));
+                removed.delete(id);
+            }
+            // Their keyboard shortcuts open Files instead.
+            const cmd = (manager()?.command?.commands ?? []).find((c) => c.id === `Workspace.ToggleSidebarTab.${id}`);
+            if (cmd && !cmd.__rigshare) {
+                const original = cmd.function;
+                cmd.function = (...args) => (removed.has(id) ? openFiles() : original(...args));
+                cmd.__rigshare = true;
+            }
+        }
+    };
+    client.on("server", apply);
+    // ComfyUI registers its own tabs around the time extensions load.
+    let tries = 0;
+    const timer = setInterval(() => { apply(); if (++tries > 15) clearInterval(timer); }, 1000);
+}
+
 function installQueueGuard(client) {
     const original = api.queuePrompt.bind(api);
     api.queuePrompt = async (...args) => {
@@ -235,6 +274,7 @@ app.registerExtension({
         installQueueGuard(client);
         installManagerGuard(client);
         installComfyAccountGuard(client);
+        installFileTabsGuard(client);
         installSaveDialog(app, api, client, sync);
         presence.install();
 

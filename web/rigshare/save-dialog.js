@@ -9,8 +9,9 @@ import { FilesBrowser, modal } from "./files.js";
 
 const LAST_FOLDER = "rigshare.lastSaveFolder";
 
+// ComfyUI adds ".json", or ".app.json" for a workflow saved as an App: names go back without either.
 function cleanName(name) {
-    return (name || "").trim().replace(/\.json$/i, "").replace(/[\\/]+/g, "-").slice(0, 120);
+    return (name || "").trim().replace(/(\.app)?\.json$/i, "").replace(/\.app$/i, "").replace(/[\\/]+/g, "-").slice(0, 120);
 }
 
 export function installSaveDialog(app, api, client, sync) {
@@ -75,7 +76,8 @@ export async function chooseLocation(app, api, client, sync, wf) {
     if (directory === "workflows") return `${result.folder}/${result.name}`;
     // "Save As" from a file that lives in another folder: write the copy
     // ourselves, open it, and tell ComfyUI there is nothing left to do.
-    return await saveCopyElsewhere(app, api, client, wf, `${targetDir}/${result.name}.json`);
+    const isApp = wf.initialMode === "app" || /\.app(\.json)?$/i.test(wf.filename || "");
+    return await saveCopyElsewhere(app, api, client, wf, `${targetDir}/${result.name}${isApp ? ".app" : ""}.json`);
 }
 
 async function saveCopyElsewhere(app, api, client, wf, path) {

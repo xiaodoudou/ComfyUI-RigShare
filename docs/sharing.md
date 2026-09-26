@@ -29,6 +29,8 @@ Only the tab on screen is live. Switch to another tab and you leave the room; sw
 - Two people editing the same node at once: the last change wins.
 - Two people adding or connecting nodes at the same moment both keep their work. If both picked the same node or link id, the server renumbers the later one and quietly resyncs that person. Links and groups merge one by one, so a connection made by one person never erases another's.
 
+**App mode.** Each person chooses for themselves whether a workflow shows as the node graph or as an App. Switching doesn't change anyone else's view, and live edits keep it. Inputs changed in the App view sync like any other widget value. The app's layout, meaning its chosen inputs and outputs, belongs to the workflow and syncs. Cursors aren't shown in the App view.
+
 Viewers (no *Edit* permission) see a read-only canvas. Anything they change locally is put back.
 
 ## When a workflow stops being live

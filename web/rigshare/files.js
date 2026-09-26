@@ -191,8 +191,8 @@ export class FilesBrowser {
         const owner = e.owner ? this.client.users.find((u) => u.key === e.owner)?.name ?? `@${e.owner}` : null;
         const meta = isFolder
             ? [e.owner !== undefined && owner ? `owner ${owner}` : null, e.role === "view" ? "view only" : null].filter(Boolean).join(" · ")
-            : [timeAgo(e.modified * 1000), e.role === "view" ? "view only" : null].filter(Boolean).join(" · ");
-        const icon = isFolder ? (e.restricted ? "pi-lock" : "pi-folder") : "pi-file";
+            : [e.app ? "App" : null, timeAgo(e.modified * 1000), e.role === "view" ? "view only" : null].filter(Boolean).join(" · ");
+        const icon = isFolder ? (e.restricted ? "pi-lock" : "pi-folder") : e.app ? "pi-th-large" : "pi-file";
         // Files outside private folders are live while open: show who is in them.
         const live = isFolder ? null : this.client.rooms?.find((r) => r.key === `file:workflows/${e.path}`);
         const disabled = this.mode === "pick" && !isFolder;

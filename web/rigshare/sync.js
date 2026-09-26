@@ -222,6 +222,13 @@ export class RoomSync extends EventTarget {
         return this.app.rootGraph ?? this.app.graph;
     }
 
+    /** The tab on screen shows ComfyUI's App view (no canvas), not the node graph. */
+    get inAppMode() {
+        const wf = this.store?.activeWorkflow;
+        const mode = wf?.activeMode ?? wf?.initialMode ?? "graph";
+        return mode === "app" || mode === "builder:arrange";
+    }
+
     serialize() {
         return stripView(JSON.parse(JSON.stringify(this.graph().serialize())));
     }
@@ -229,7 +236,7 @@ export class RoomSync extends EventTarget {
     // ----- which room does a tab belong to --------------------------------
 
     tabName(wf) {
-        return (wf.filename ?? wf.path?.split("/").pop() ?? "Workflow").replace(/\.json$/, "");
+        return (wf.filename ?? wf.path?.split("/").pop() ?? "Workflow").replace(/(\.app)?\.json$/, "");
     }
 
     /** Why a tab is not live: "unsaved", "private", or null when it is shared. */
@@ -317,6 +324,8 @@ export class RoomSync extends EventTarget {
         const doc = structuredClone(this.doc);
         const ds = this.app.canvas?.ds;
         if (keepView && ds) doc.extra = { ...(doc.extra || {}), ds: { scale: ds.scale, offset: [...ds.offset] } };
+        // Graph or App view is each person's own choice: a reload must not switch it.
+        const mode = wf.activeMode;
         this.applying++;
         this.ownLoad++;
         try {
@@ -324,6 +333,7 @@ export class RoomSync extends EventTarget {
         } finally {
             this.ownLoad--;
             this.applying--;
+            if (mode && wf.activeMode !== mode) wf.activeMode = mode;
         }
         this.settle();
         this.updateReadOnly();

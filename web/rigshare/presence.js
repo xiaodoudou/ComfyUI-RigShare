@@ -71,7 +71,7 @@ export class Presence extends EventTarget {
     sendState() {
         if (!this.client.online || !this.app.canvas) return;
         let msg;
-        if (!this.sync.live || document.hidden) {
+        if (!this.sync.live || document.hidden || this.sync.inAppMode) {
             msg = { type: "cursor", x: null, y: null };
         } else {
             const [x, y] = this.app.canvas.graph_mouse ?? [0, 0];
@@ -104,7 +104,7 @@ export class Presence extends EventTarget {
     }
 
     applyViewport(vp, graphId) {
-        if (graphId !== this.currentGraphId()) return;
+        if (graphId !== this.currentGraphId() || this.sync.inAppMode) return;
         const canvas = this.app.canvas;
         const rect = canvas.canvas.getBoundingClientRect();
         canvas.ds.scale = vp.scale;
@@ -123,7 +123,7 @@ export class Presence extends EventTarget {
 
     draw(ctx) {
         const visible = new Set();
-        if (!this.sync.live || !this.showCursors) return this.pruneCursorEls(visible);
+        if (!this.sync.live || !this.showCursors || this.sync.inAppMode) return this.pruneCursorEls(visible);
         const canvas = this.app.canvas;
         const graph = canvas.graph;
         const scale = canvas.ds.scale;

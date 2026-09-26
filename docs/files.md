@@ -29,6 +29,10 @@ RigShare organises ComfyUI's workflows folder like a shared drive. Where a workf
   </tr>
 </table>
 
+ComfyUI's own **Workflows** and **Apps** tabs are hidden, since Files replaces them, and their keyboard shortcuts open Files. Admins can bring them back under *Admin → Server settings*. Hiding them isn't what protects the files, though: the server applies the same rules whichever browser is used. If you show ComfyUI's open workflow tabs in the sidebar (*Comfy.Workflow.WorkflowTabsPosition*), the Workflows tab stays, because it lists them.
+
+Workflows saved as **Apps** (ComfyUI's App mode, `.app.json`) show with an app icon. Opening one opens it as an app.
+
 Click a workflow to open it. The Files tab marks live workflows with a green dot. **From computer** opens a workflow file from your machine, like ComfyUI's own *Open*.
 
 Hover a row for its actions: **Rename**, **Move to…**, **Delete**, and on a shared folder you own, 🔒 **Who can open it**. The folder button creates a folder. In the Shared tab it creates a shared folder that you own.

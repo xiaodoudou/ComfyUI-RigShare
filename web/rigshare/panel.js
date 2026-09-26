@@ -392,7 +392,7 @@ export class RigSharePanel {
             const members = r.members.map((id) => byId.get(id)).filter(Boolean);
             const folder = r.key.replace(/^file:workflows\//, "").split("/").slice(0, -1).join("/");
             return h("div", { class: `rs-row-item rs-room ${here ? "here" : ""}`, title: r.key.replace(/^file:workflows\//, "") },
-                h("i", { class: "pi pi-file rs-row-icon" }),
+                h("i", { class: `pi ${r.app ? "pi-th-large" : "pi-file"} rs-row-icon`, title: r.app ? "App" : null }),
                 h("div", { class: "rs-grow rs-min0" },
                     h("div", { class: "rs-name rs-ellipsis" }, r.name, r.restricted ? h("i", { class: "pi pi-lock rs-inline-icon rs-muted", title: "Restricted" }) : null),
                     h("div", { class: "rs-muted rs-small rs-ellipsis" }, folder ? folder.replace(/^shared(\/|$)/, "Shared$1") : "Workflows", ` · ${r.nodes} nodes`),
@@ -777,6 +777,7 @@ export class RigSharePanel {
             broadcast: box(cfg.broadcast_execution),
             protect: box(cfg.api_protection?.enabled),
             hideAccount: box(cfg.hide_comfy_account),
+            hideFileTabs: box(cfg.hide_comfy_file_tabs ?? true),
             hideApiTemplates: box(cfg.hide_api_templates),
             trusted: text((cfg.api_protection?.trusted_ips || []).join(", "), "127.0.0.1, 172.17.0.0/16"),
             interval: h("input", { class: "rs-input rs-num", type: "number", min: 0, value: Math.round((cfg.snapshot_interval_sec ?? 300) / 60) }),
@@ -794,6 +795,7 @@ export class RigSharePanel {
                     allow_guests: f.guests.checked,
                     broadcast_execution: f.broadcast.checked,
                     hide_comfy_account: f.hideAccount.checked,
+                    hide_comfy_file_tabs: f.hideFileTabs.checked,
                     hide_api_templates: f.hideApiTemplates.checked,
                     api_protection: { enabled: f.protect.checked, trusted_ips: f.trusted.value.split(/[\s,]+/).filter(Boolean) },
                     snapshot_interval_sec: Math.max(0, +f.interval.value || 0) * 60,
@@ -808,6 +810,7 @@ export class RigSharePanel {
         line(f.broadcast, "Share execution progress", "Everyone sees progress and previews, not only whoever queued"),
         line(f.protect, "Enforce permissions on the ComfyUI API", "Blocks queueing, interrupting and uploads for users without permission"),
         line(f.hideAccount, "Hide the Comfy.org account login", "Removes ComfyUI's own sign-in button and dialog (used for paid API nodes)"),
+        line(f.hideFileTabs, "Hide ComfyUI's Workflows and Apps tabs", "RigShare's Files tab replaces them. Their shortcuts open Files instead"),
         line(f.hideApiTemplates, "Hide API templates", "Removes templates that need paid API nodes from the template browser"),
         h("label", { class: "rs-label" }, "Trusted IPs / networks (skip login and checks)"), f.trusted,
         h("div", { class: "rs-row" }, h("label", { class: "rs-label rs-grow" }, "Auto snapshot every (min, 0 = off)"), f.interval),

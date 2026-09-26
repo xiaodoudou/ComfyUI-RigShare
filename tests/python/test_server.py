@@ -324,3 +324,30 @@ def test_chat_history_pages(run):
             assert "hello 0" in texts and seqs == list(range(len(seqs))), "no gaps, no repeats"
             assert (await session.get(rig.url("/rigshare/api/chat?before=x"))).status in (400, 401)
     run(scenario())
+
+
+def test_apps_and_comfy_file_tabs(run):
+    async def scenario():
+        async with rig_server() as rig:
+            admin = await rig.setup_admin()
+            alice = await rig.add_user("alice", edit=True)
+            h = rig.http
+            await h.post(rig.url(f"/api/userdata/{enc('workflows/users/alice/demo.app.json')}"), data=b"{}", headers=alice)
+            await h.post(rig.url(f"/api/userdata/{enc('workflows/users/alice/plain.json')}"), data=b"{}", headers=alice)
+            listing = await (await h.get(rig.url("/rigshare/api/workspace/list?path=users/alice"), headers=alice)).json()
+            entries = {e["name"]: e for e in listing["entries"]}
+            assert entries["demo"].get("app") is True and "app" not in entries["plain"], "apps named without .app"
+
+            sock = await rig.ws("alice")
+            key = "file:workflows/shared/demo.app.json"
+            await sock.send({"type": "join", "room": key, "name": "demo", "doc": BASE_DOC})
+            await sock.until("room")
+            presence = [m for m in await sock.drain() if m["type"] == "presence"][-1]
+            assert presence["rooms"][0]["app"] is True
+
+            # ComfyUI's own Workflows/Apps tabs are hidden unless an admin turns that off.
+            assert rig.hub.server_info()["hide_comfy_file_tabs"] is True
+            await h.patch(rig.url("/rigshare/api/config"), json={"hide_comfy_file_tabs": False}, headers=admin)
+            assert (await sock.until("server"))["server"]["hide_comfy_file_tabs"] is False
+            await sock.close()
+    run(scenario())
