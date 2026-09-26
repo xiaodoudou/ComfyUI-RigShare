@@ -120,7 +120,7 @@ export class RoomSync extends EventTarget {
         this.inFlight = 0;      // our patches not yet acknowledged
         this.crossed = false;   // a remote patch arrived while ours were in flight
 
-        client.on("welcome", () => { this.targetKey = undefined; this.tick(); });
+        client.on("welcome", () => { this.targetKey = undefined; this.sentView = undefined; this.tick(); });
         client.on("status", (s) => { if (s !== "online") { this.ready = false; this.emitState(); } });
         client.on("room", (msg) => this.onRoom(msg));
         client.on("room_info", (msg) => {
@@ -261,6 +261,9 @@ export class RoomSync extends EventTarget {
 
     tick() {
         if (!this.client.online || !this.store) return;
+        // Tell the others whether this tab shows the node graph or the App view.
+        const view = this.inAppMode ? "app" : "graph";
+        if (view !== this.sentView && this.client.send({ type: "view", view })) this.sentView = view;
         const { wf, room } = this.activeRoom();
         const key = room?.key ?? null;
         if (key !== this.targetKey || (key && wf !== this.targetWf)) {

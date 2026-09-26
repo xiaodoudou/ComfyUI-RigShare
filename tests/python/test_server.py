@@ -351,3 +351,20 @@ def test_apps_and_comfy_file_tabs(run):
             assert (await sock.until("server"))["server"]["hide_comfy_file_tabs"] is False
             await sock.close()
     run(scenario())
+
+
+def test_view_mode_in_presence(run):
+    async def scenario():
+        async with rig_server() as rig:
+            await rig.setup_admin()
+            await rig.add_user("alice", edit=True)
+            alice, boss = await rig.ws("alice"), await rig.ws("boss")
+            await boss.drain()
+            await alice.send({"type": "view", "view": "app"})
+            presence = await boss.until("presence")
+            assert {u["key"]: u["view"] for u in presence["users"]} == {"alice": "app", "boss": "graph"}
+            await alice.send({"type": "view", "view": "nonsense"})
+            await asyncio.sleep(0.2)
+            assert next(c for c in rig.hub.clients.values() if c.key == "alice").view == "app", "unknown views are ignored"
+            await alice.close(); await boss.close()
+    run(scenario())

@@ -7,7 +7,7 @@
 // One component serves the Files tab ("browse"), the "Open from RigShare"
 // dialog ("open"), the Save dialog ("save") and the "Move to…" picker ("pick").
 
-import { h, timeAgo, storage } from "./ui.js";
+import { h, timeAgo, storage, APP_ICON } from "./ui.js";
 
 const SHARED = "@shared";
 const ALL = "";
@@ -192,7 +192,7 @@ export class FilesBrowser {
         const meta = isFolder
             ? [e.owner !== undefined && owner ? `owner ${owner}` : null, e.role === "view" ? "view only" : null].filter(Boolean).join(" · ")
             : [e.app ? "App" : null, timeAgo(e.modified * 1000), e.role === "view" ? "view only" : null].filter(Boolean).join(" · ");
-        const icon = isFolder ? (e.restricted ? "pi-lock" : "pi-folder") : e.app ? "pi-th-large" : "pi-file";
+        const icon = isFolder ? (e.restricted ? "pi-lock" : "pi-folder") : e.app ? "app" : "pi-file";
         // Files outside private folders are live while open: show who is in them.
         const live = isFolder ? null : this.client.rooms?.find((r) => r.key === `file:workflows/${e.path}`);
         const disabled = this.mode === "pick" && !isFolder;
@@ -207,7 +207,7 @@ export class FilesBrowser {
                     if (this.mode !== "pick") this.onOpenFile?.(`workflows/${e.path}`);
                 },
             },
-            h("i", { class: `pi ${icon} rs-fb-icon ${isFolder ? "folder" : ""}` }),
+            h("i", { class: `${icon === "app" ? `${APP_ICON} rs-comfy-icon` : `pi ${icon}`} rs-fb-icon ${isFolder ? "folder" : ""}` }),
             h("span", { class: "rs-grow rs-min0" },
                 h("div", { class: "rs-name rs-ellipsis", title: e.name }, e.name,
                     live ? h("span", { class: "rs-live rs-inline-icon", title: `Live · ${live.members.length} open` }, h("span", { class: "rs-live-dot" })) : null),

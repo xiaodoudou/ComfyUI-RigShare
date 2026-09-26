@@ -62,3 +62,11 @@ export const storage = {
         } catch { /* private mode */ }
     },
 };
+
+// ComfyUI's own icons for its Graph / App switch, so RigShare matches what people see there.
+export const GRAPH_ICON = "icon-[comfy--workflow]";
+export const APP_ICON = "icon-[lucide--panels-top-left]";
+
+export function viewIcon(view, cls = "") {
+    return h("i", { class: `${view === "app" ? APP_ICON : GRAPH_ICON} rs-comfy-icon ${cls}` });
+}

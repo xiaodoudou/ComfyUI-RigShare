@@ -76,12 +76,13 @@ class Client:
         self.joined = time.time()
         self.idle = False
         self.room = None
+        self.view = "graph"  # "graph" (node editor) or "app" (ComfyUI's App view)
 
     def public(self):
         return {"id": self.id, "kind": self.kind, "key": self.key if self.kind == "user" else None,
                 "guest_id": self.key if self.kind == "guest" else None,
                 "name": self.name, "color": self.color, "perms": self.perms,
-                "joined": int(self.joined), "idle": self.idle, "room": self.room}
+                "joined": int(self.joined), "idle": self.idle, "room": self.room, "view": self.view}
 
 
 class Hub:
@@ -504,6 +505,12 @@ class Hub:
             await self.send(client, {"type": "self", "self": client.public()})
             await self.broadcast_presence()
             await self.system_chat(f"{old} is now known as {name}")
+
+        elif kind == "view":
+            view = data.get("view")
+            if view in ("graph", "app") and view != client.view:
+                client.view = view
+                await self.broadcast_presence()
 
         elif kind == "idle":
             client.idle = bool(data.get("idle"))

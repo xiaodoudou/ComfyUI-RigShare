@@ -1,7 +1,7 @@
 // Sidebar panel: tabs for workflows, people, chat, server and admin, plus an
 // account view (profile, password, API keys) behind the avatar button.
 
-import { h, initials, timeAgo, clock, roleChips, meter, storage } from "./ui.js";
+import { h, initials, timeAgo, clock, roleChips, meter, storage, viewIcon, APP_ICON } from "./ui.js";
 import { ServerWidget } from "./server-widget.js";
 import { pickFolder } from "./files.js";
 import { isPrivatePath } from "./sync.js";
@@ -247,7 +247,7 @@ export class RigSharePanel {
                 s.live
                     ? h("span", { class: "rs-live" }, h("span", { class: "rs-live-dot" }), `Live · rev ${s.version}${last}`)
                     : h("span", { class: "rs-live rs-muted" }, h("i", { class: "pi pi-spin pi-spinner" }), "Joining…"),
-                h("span", { class: "rs-avatars" }, ...here.map((u) => h("span", { class: "rs-avatar rs-avatar-xs", style: `background:${u.color}`, title: u.name }, initials(u.name))))));
+                h("span", { class: "rs-avatars" }, ...here.map((u) => this.viewAvatar(u)))));
             body.push(this.accessLine());
             if (this.accessOpen && s.room?.manage && s.room.folder) body.push(this.accessEditor(s.room.folder));
             if (!s.canEdit) body.push(h("p", { class: "rs-note" }, h("i", { class: "pi pi-lock" }), c.perms.edit ? "View only in this workflow." : "View only — ask an admin for edit access."));
@@ -383,6 +383,15 @@ export class RigSharePanel {
         await this.app.loadGraphData(doc, true, true, `${snap.room_name || "Snapshot"} (${snap.label || snap.id}).json`);
     }
 
+    /** Small avatar marked with how that person views the workflow: node graph or App. */
+    viewAvatar(u) {
+        const app = u.view === "app";
+        return h("span", {
+            class: `rs-avatar rs-avatar-xs rs-view-avatar ${app ? "rs-view-app" : ""}`, style: `background:${u.color}`,
+            title: `${u.name} · ${app ? "App view" : "editing the graph"}`,
+        }, initials(u.name), h("span", { class: "rs-view-mark" }, viewIcon(u.view)));
+    }
+
     roomsSection() {
         const c = this.client;
         const rooms = c.rooms || [];
@@ -392,11 +401,11 @@ export class RigSharePanel {
             const members = r.members.map((id) => byId.get(id)).filter(Boolean);
             const folder = r.key.replace(/^file:workflows\//, "").split("/").slice(0, -1).join("/");
             return h("div", { class: `rs-row-item rs-room ${here ? "here" : ""}`, title: r.key.replace(/^file:workflows\//, "") },
-                h("i", { class: `pi ${r.app ? "pi-th-large" : "pi-file"} rs-row-icon`, title: r.app ? "App" : null }),
+                h("i", { class: `${r.app ? `${APP_ICON} rs-comfy-icon` : "pi pi-file"} rs-row-icon`, title: r.app ? "App" : null }),
                 h("div", { class: "rs-grow rs-min0" },
                     h("div", { class: "rs-name rs-ellipsis" }, r.name, r.restricted ? h("i", { class: "pi pi-lock rs-inline-icon rs-muted", title: "Restricted" }) : null),
                     h("div", { class: "rs-muted rs-small rs-ellipsis" }, folder ? folder.replace(/^shared(\/|$)/, "Shared$1") : "Workflows", ` · ${r.nodes} nodes`),
-                    h("div", { class: "rs-avatars" }, ...members.map((u) => h("span", { class: "rs-avatar rs-avatar-xs", style: `background:${u.color}`, title: u.name }, initials(u.name))))),
+                    h("div", { class: "rs-avatars" }, ...members.map((u) => this.viewAvatar(u)))),
                 here ? h("span", { class: "rs-chip rs-chip-edit" }, "open") : h("button", {
                     class: "rs-btn rs-btn-icon", title: "Open",
                     onclick: () => this.run(() => this.sync.openRoom(r)),
@@ -432,7 +441,9 @@ export class RigSharePanel {
                     h("div", { class: "rs-name rs-ellipsis" }, u.name, self ? h("span", { class: "rs-muted" }, " (you)") : null,
                         u.idle ? h("i", { class: "pi pi-moon rs-muted rs-inline-icon", title: "Away" }) : null),
                     h("div", { class: "rs-chips" }, ...(toggles.length ? toggles : roleChips(u.perms))),
-                    h("div", { class: "rs-where" }, h("i", { class: `pi ${where ? "pi-file" : "pi-lock"}` }), h("span", { class: "rs-ellipsis" }, where ?? "private tab"))),
+                    h("div", { class: "rs-where" }, h("i", { class: `pi ${where ? "pi-file" : "pi-lock"}` }), h("span", { class: "rs-ellipsis" }, where ?? "private tab"),
+                        where ? h("span", { class: `rs-chip rs-view-chip ${u.view === "app" ? "rs-view-app" : ""}` },
+                            viewIcon(u.view), u.view === "app" ? "App" : "Graph") : null)),
                 self ? null : h("button", {
                     class: `rs-btn rs-btn-icon ${following ? "rs-btn-primary" : ""}`,
                     title: following ? "Stop following" : `Follow ${u.name} (jump to their tab and view)`,

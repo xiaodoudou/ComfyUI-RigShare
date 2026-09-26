@@ -94,7 +94,7 @@ code { font-family: ui-monospace, monospace; font-size: 11px; background: var(--
 .rs-avatar-sm { width: 28px; height: 28px; font-size: 10.5px; }
 .rs-avatar-lg { width: 44px; height: 44px; font-size: 15px; }
 .rs-avatar-xs { width: 20px; height: 20px; font-size: 8.5px; }
-.rs-avatars { display: inline-flex; gap: 3px; flex-wrap: wrap; margin-top: 3px; }
+.rs-avatars { display: inline-flex; gap: 7px; flex-wrap: wrap; margin-top: 3px; }
 .rs-name { font-weight: 600; }
 .rs-me { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; }
 .rs-chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 3px; }
@@ -261,6 +261,14 @@ body.rs-no-manager [aria-label="ComfyUI Manager"] { display: none !important; }
   background: #ef4444; color: #fff; font-size: 10px; line-height: 16px; font-weight: 700; text-align: center; }
 .rs-dock-close { position: absolute; top: 8px; right: 8px; z-index: 2; border: 0; background: none; color: var(--rs-muted); cursor: pointer; padding: 4px; }
 .rs-dock-close:hover { color: var(--rs-fg); }
+.rs-view-avatar { position: relative; overflow: visible; }
+.rs-comfy-icon { display: inline-block; width: 1em; height: 1em; flex: none; }
+.rs-view-mark { position: absolute; right: -6px; bottom: -5px; font-size: 8px; width: 13px; height: 13px; display: grid; place-items: center;
+  border-radius: 50%; background: var(--rs-bg); color: var(--rs-muted); border: 1px solid var(--rs-border); }
+.rs-view-app .rs-view-mark { color: var(--rs-accent-fg); background: var(--rs-accent); border-color: var(--rs-accent); }
+.rs-view-chip { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; font-size: 10.5px; padding: 0 6px; }
+.rs-view-chip .rs-comfy-icon { font-size: 11px; }
+.rs-view-chip.rs-view-app { color: var(--rs-accent); border-color: var(--rs-accent); }
 .rs-cursor-layer { position: fixed; inset: 0; pointer-events: none; z-index: 900; overflow: hidden; }
 .rs-cursor { position: absolute; left: 0; top: 0; will-change: transform; transition: transform 70ms linear; }
 .rs-cursor svg { display: block; filter: drop-shadow(0 1px 1px rgb(0 0 0 / .4)); }
