@@ -46,7 +46,8 @@ The panel uses these; they take the same session cookie or API key.
 | `GET /rigshare/api/status` | Server name and whether setup is needed (public) |
 | `GET /rigshare/api/me` | The current account |
 | `GET/POST /rigshare/api/me/keys`, `DELETE /rigshare/api/me/keys/{id}` | Your API keys |
-| `GET /rigshare/api/rooms` | Shared workflows |
+| `GET /rigshare/api/chat?before=<seq>&limit=50` | Older chat messages, oldest first, and whether more exist |
+| `GET /rigshare/api/rooms` | Live workflows |
 | `GET /rigshare/api/room?key=…` | One room, with its workflow JSON |
 | `GET /rigshare/api/snapshots?room=…` | History of a room |
 | `GET /rigshare/api/people` | Accounts that can be added to an access list |

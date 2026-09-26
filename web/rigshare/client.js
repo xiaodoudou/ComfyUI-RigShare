@@ -28,7 +28,8 @@ export class RigClient extends EventTarget {
         this.status = "offline"; // offline | connecting | online | denied
         this.self = null;
         this.users = [];
-        this.chat = [];
+        this.chat = [];          // loaded chat messages, oldest first
+        this.chatMore = false;   // older messages exist on the server
         this.rooms = [];
         this.stats = null;
         this.server = {};
@@ -105,6 +106,7 @@ export class RigClient extends EventTarget {
                 this.self = msg.self;
                 this.users = msg.users;
                 this.chat = msg.chat || [];
+                this.chatMore = !!msg.chat_more;
                 this.rooms = msg.rooms || [];
                 this.stats = msg.stats;
                 this.server = msg.server || {};
@@ -146,7 +148,6 @@ export class RigClient extends EventTarget {
                 break;
             case "chat":
                 this.chat.push(msg.message);
-                if (this.chat.length > 500) this.chat.shift();
                 this.emit("chat", msg.message);
                 break;
             default:
@@ -198,6 +199,18 @@ export class RigClient extends EventTarget {
     authHeaders() {
         if (this.token) return { "X-RigShare-Token": this.token };
         return { "X-RigShare-Guest": this.guestId };
+    }
+
+    /** Fetch the page of chat before the oldest loaded message; returns them (oldest first). */
+    async loadOlderChat(limit = 50) {
+        const oldest = this.chat[0]?.seq;
+        if (!this.chatMore || oldest === undefined) return [];
+        const data = await this.request("GET", `/rigshare/api/chat?before=${oldest}&limit=${limit}`);
+        // A reconnect may have replaced the history meanwhile.
+        if (this.chat[0]?.seq !== oldest) return [];
+        this.chat.unshift(...data.messages);
+        this.chatMore = data.more;
+        return data.messages;
     }
 
     async request(method, path, body) {

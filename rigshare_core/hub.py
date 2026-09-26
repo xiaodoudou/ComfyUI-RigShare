@@ -15,10 +15,10 @@ import json
 import logging
 import secrets
 import time
-from collections import deque
 
 from aiohttp import web, WSMsgType
 
+from .chatlog import ChatLog
 from .graphdoc import apply_patch, remap_conflicts
 from .stats import collect_stats
 from .workspace import Workspace
@@ -28,6 +28,7 @@ log = logging.getLogger("ComfyUI-RigShare")
 COLORS = ["#f87171", "#fb923c", "#facc15", "#4ade80", "#2dd4bf", "#38bdf8",
           "#818cf8", "#c084fc", "#f472b6", "#a3e635", "#fbbf24", "#22d3ee"]
 MAX_MESSAGE = 16 * 1024 * 1024
+CHAT_PAGE = 50
 
 
 def clean_text(text, limit):
@@ -99,10 +100,8 @@ class Hub:
                                                data.get("doc"), data.get("version", 0), data.get("updated"))
             except (KeyError, TypeError):
                 continue
-        self.chat = deque(maxlen=int(store.config.get("chat_history", 200)))
-        for msg in store._read("chat.json", []):
-            self.chat.append(msg)
-        self.chat_dirty = False
+        self.chat = ChatLog(store.folder, keep=int(store.config.get("chat_keep") or 0),
+                            legacy=store._read("chat.json", None))
         self.stats = None
         self._task = None
         self.workspace = None  # set by __init__ (folders, private spaces)
@@ -131,9 +130,6 @@ class Hub:
                     if expiry > 0 and now - room.updated > expiry and not self.members(room.key):
                         self.rooms.pop(room.key, None)
                         self.store.delete_room(room.key)
-                if self.chat_dirty:
-                    self.store._write("chat.json", list(self.chat))
-                    self.chat_dirty = False
             except Exception as e:
                 log.error(f"[RigShare] housekeeping error: {e}")
 
@@ -384,8 +380,7 @@ class Hub:
 
     async def system_chat(self, text):
         msg = {"id": secrets.token_hex(6), "system": True, "text": text, "ts": int(time.time() * 1000)}
-        self.chat.append(msg)
-        self.chat_dirty = True
+        msg = self.chat.append(msg)
         await self.broadcast({"type": "chat", "message": msg})
 
     # ----- websocket ----------------------------------------------------
@@ -440,7 +435,7 @@ class Hub:
                 "self": client.public(),
                 "users": self.users_for(client),
                 "rooms": self.room_list(client),
-                "chat": list(self.chat),
+                **dict(zip(("chat", "chat_more"), self.chat.page(limit=CHAT_PAGE))),
                 "stats": self.stats,
                 "server": self.server_info(),
             })
@@ -496,8 +491,7 @@ class Hub:
                 return
             msg = {"id": secrets.token_hex(6), "from": client.id, "name": client.name,
                    "color": client.color, "text": text, "ts": int(time.time() * 1000)}
-            self.chat.append(msg)
-            self.chat_dirty = True
+            msg = self.chat.append(msg)
             await self.broadcast({"type": "chat", "message": msg})
 
         elif kind == "rename":

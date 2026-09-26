@@ -51,7 +51,7 @@ The data folder is `<ComfyUI base path>/rigshare`; point it elsewhere with `RIGS
 | `config.json` | Server settings, see [Settings](settings.md) |
 | `rooms/` | Current state of every shared workflow |
 | `snapshots/` | Workflow history |
-| `chat.json` | Recent chat |
+| `chat.jsonl` | The whole chat history, one message per line |
 
 Back up the folder to keep accounts and history. Deleting `secret.key` signs everyone out.
 

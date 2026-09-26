@@ -33,7 +33,7 @@ Admins change these under **Admin → Server settings**. They are stored in `rig
 | `room_expiry_days` | `14` | Forget the live state of workflows nobody opened for this long |
 | `snapshot_interval_sec` | `300` | Automatic snapshot interval while editing; `0` turns it off |
 | `snapshot_keep` | `30` | Automatic snapshots kept per workflow; named ones are always kept |
-| `chat_history` | `200` | Chat messages kept |
+| `chat_keep` | `0` | Chat messages kept: `0` keeps the whole history, a number trims it to the latest ones at startup |
 
 ## Environment variables
 

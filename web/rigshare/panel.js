@@ -36,7 +36,8 @@ export class RigSharePanel {
         this.body = h("div", { class: "rs-body" });
         this.root = h("div", { class: "rs-panel" }, this.header, this.nav, this.body);
 
-        this.chatLog = h("div", { class: "rs-chat-log" });
+        this.chatTop = h("div", { class: "rs-chat-top" });
+        this.chatLog = h("div", { class: "rs-chat-log", onscroll: () => this.maybeLoadOlder() });
         this.chatInput = h("textarea", {
             class: "rs-input rs-chat-input", placeholder: "Message… (Enter to send)", maxLength: 1000, rows: 1,
             onkeydown: (e) => {
@@ -63,8 +64,11 @@ export class RigSharePanel {
 
     mount(container) {
         container.classList.add("rs-host");
-        container.append(this.root);
+        // ComfyUI reuses the same slot element when switching straight between
+        // two custom sidebar tabs: replace whatever the other tab left there.
+        container.replaceChildren(this.root);
         this.visible = true;
+        this.renderedView = null; // reopened: the chat starts at the newest message
         if (this.view === "chat") this.clearUnread();
         this.render();
     }
@@ -192,9 +196,14 @@ export class RigSharePanel {
         };
         if ((this.view === "admin" && !c.perms.admin) || !VIEWS.some((v) => v.id === this.view) && this.view !== "account") this.view = "workflows";
         const scroll = this.body.scrollTop;
+        // Re-attaching the chat resets its scroll: keep the reader's place in the history.
+        const stay = this.view === "chat" && this.renderedView === "chat";
+        const chatScroll = this.chatLog.scrollTop;
         this.body.replaceChildren(...(views[this.view] ?? views.workflows)().filter(Boolean));
         this.body.scrollTop = scroll;
-        if (this.view === "chat") this.scrollChat();
+        if (stay) this.chatLog.scrollTop = chatScroll;
+        else if (this.view === "chat") this.scrollChat();
+        this.renderedView = this.view;
     }
 
     section(icon, title, ...children) {
@@ -447,6 +456,71 @@ export class RigSharePanel {
         if (this.client.send({ type: "chat", text })) this.chatInput.value = "";
     }
 
+    dayLabel(ts) {
+        const d = new Date(ts);
+        const today = new Date();
+        const yesterday = new Date(today.getTime() - 86400000);
+        if (d.toDateString() === today.toDateString()) return "Today";
+        if (d.toDateString() === yesterday.toDateString()) return "Yesterday";
+        return d.toLocaleDateString([], { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+    }
+
+    /** Chat lines for ``messages``, with a date divider wherever the day changes after ``prev``. */
+    chatLines(messages, prev) {
+        const out = [];
+        for (const m of messages) {
+            if (!prev || new Date(prev.ts).toDateString() !== new Date(m.ts).toDateString()) {
+                out.push(h("div", { class: "rs-chat-day" }, h("span", {}, this.dayLabel(m.ts))));
+            }
+            out.push(this.chatLine(m));
+            prev = m;
+        }
+        return out;
+    }
+
+    renderChatTop() {
+        const c = this.client;
+        this.chatTop.replaceChildren(this.loadingOlder
+            ? h("span", { class: "rs-muted rs-small" }, h("i", { class: "pi pi-spin pi-spinner" }), " Loading older messages…")
+            : c.chatMore
+                ? h("button", { class: "rs-btn rs-btn-sm rs-btn-ghost", onclick: () => this.loadOlder() }, "Load older messages")
+                : c.chat.length ? h("span", { class: "rs-muted rs-small" }, "Beginning of the chat") : null);
+    }
+
+    maybeLoadOlder() {
+        if (this.chatLog.scrollTop < 120 && this.client.chatMore && !this.loadingOlder) this.loadOlder();
+    }
+
+    /** Infinite scroll back: prepend the previous page and keep the view where it was. */
+    async loadOlder() {
+        if (this.loadingOlder || !this.client.chatMore) return;
+        this.loadingOlder = true;
+        this.renderChatTop();
+        try {
+            const next = this.client.chat.find((m) => m.seq !== undefined);
+            const older = await this.client.loadOlderChat();
+            if (older.length) {
+                const log = this.chatLog;
+                const before = log.scrollHeight - log.scrollTop;
+                // The first message's date divider is redrawn with the older page.
+                const firstDay = this.chatTop.nextSibling;
+                if (firstDay?.classList?.contains("rs-chat-day") && next
+                    && new Date(older.at(-1).ts).toDateString() === new Date(next.ts).toDateString()) firstDay.remove();
+                this.chatTop.after(...this.chatLines(older));
+                log.scrollTop = log.scrollHeight - before;
+            }
+        } catch (e) {
+            this.toast("error", e.message || String(e));
+        } finally {
+            this.loadingOlder = false;
+            this.renderChatTop();
+        }
+        // Still not enough to scroll: keep going.
+        requestAnimationFrame(() => {
+            if (this.chatLog.scrollHeight <= this.chatLog.clientHeight + 120) this.maybeLoadOlder();
+        });
+    }
+
     chatLine(m) {
         if (m.system) return h("div", { class: "rs-msg rs-msg-system" }, h("span", { class: "rs-time" }, clock(m.ts)), m.text);
         const mine = m.from === this.client.self?.id;
@@ -458,8 +532,12 @@ export class RigSharePanel {
     }
 
     renderChatLog() {
-        this.chatLog.replaceChildren(...this.client.chat.slice(-200).map((m) => this.chatLine(m)));
+        this.chatLog.replaceChildren(this.chatTop, ...this.chatLines(this.client.chat));
+        this.renderChatTop();
         this.scrollChat();
+        requestAnimationFrame(() => {
+            if (this.chatLog.isConnected && this.chatLog.scrollHeight <= this.chatLog.clientHeight + 120) this.maybeLoadOlder();
+        });
     }
 
     scrollChat() {
@@ -468,8 +546,9 @@ export class RigSharePanel {
 
     onChat(m) {
         const atBottom = this.chatLog.scrollHeight - this.chatLog.scrollTop - this.chatLog.clientHeight < 40;
-        this.chatLog.append(this.chatLine(m));
-        while (this.chatLog.childElementCount > 300) this.chatLog.firstChild.remove();
+        const chat = this.client.chat;
+        this.chatLog.append(...this.chatLines([m], chat[chat.length - 2]));
+        if (chat.length === 1) this.renderChatTop();
         if (atBottom || m.from === this.client.self?.id) this.scrollChat();
         const seen = this.visible && this.view === "chat" && !document.hidden;
         if (!seen && !m.system && m.from !== this.client.self?.id) {

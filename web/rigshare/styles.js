@@ -155,6 +155,9 @@ body.rs-no-manager [aria-label="ComfyUI Manager"] { display: none !important; }
 .rs-msg.mine .rs-msg-text { border-radius: 10px 4px 10px 10px; background: color-mix(in srgb, var(--rs-accent) 22%, var(--rs-bg2)); margin-left: auto; }
 .rs-msg-system { align-self: center; color: var(--rs-muted); font-size: 11px; font-style: italic; }
 .rs-time { color: var(--rs-muted); font-size: 10px; font-variant-numeric: tabular-nums; margin-right: 4px; }
+.rs-chat-top { display: flex; justify-content: center; align-items: center; min-height: 28px; flex: none; }
+.rs-chat-day { display: flex; align-items: center; gap: 8px; color: var(--rs-muted); font-size: 11px; flex: none; }
+.rs-chat-day::before, .rs-chat-day::after { content: ""; flex: 1; border-top: 1px solid var(--rs-border); }
 .rs-chat-compose { display: flex; gap: 6px; align-items: flex-end; border-top: 1px solid var(--rs-border); padding-top: 8px; }
 .rs-chat-input { resize: none; max-height: 120px; min-height: 32px; }
 

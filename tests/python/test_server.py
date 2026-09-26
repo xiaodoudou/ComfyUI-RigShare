@@ -292,3 +292,35 @@ def test_moves_follow_open_tabs(run):
             for sock in socks.values():
                 await sock.close()
     run(scenario())
+
+
+def test_chat_history_pages(run):
+    async def scenario():
+        async with rig_server() as rig:
+            await rig.setup_admin()
+            sock = await rig.ws("boss")
+            for i in range(70):
+                await sock.send({"type": "chat", "text": f"hello {i}"})
+            await asyncio.sleep(0.3)
+            await sock.close()
+            sock = await rig.ws("boss")
+            await sock.close()
+            # The welcome carries only the newest page; the rest comes over HTTP.
+            h = rig.headers["boss"]
+            session = rig.http
+            ws = await session.ws_connect(rig.url("/rigshare/ws"), headers=h)
+            await ws.send_json({"type": "hello"})
+            while True:
+                welcome = json.loads((await ws.receive()).data)
+                if welcome["type"] == "welcome":
+                    break
+            await ws.close()
+            assert len(welcome["chat"]) == 50 and welcome["chat_more"]
+            oldest = welcome["chat"][0]["seq"]
+            older = await (await session.get(rig.url(f"/rigshare/api/chat?before={oldest}&limit=50"), headers=h)).json()
+            texts = [m["text"] for m in older["messages"]]
+            assert not older["more"] and older["messages"][0]["seq"] == 0
+            seqs = [m["seq"] for m in older["messages"] + welcome["chat"]]
+            assert "hello 0" in texts and seqs == list(range(len(seqs))), "no gaps, no repeats"
+            assert (await session.get(rig.url("/rigshare/api/chat?before=x"))).status in (400, 401)
+    run(scenario())

@@ -344,6 +344,18 @@ def setup(server, store, hub):
             return user.get("display_name") or user["username"]
         return "guest"
 
+    @routes.get("/rigshare/api/chat")
+    async def chat_history(request):
+        """Older chat messages: ``before`` is the seq of the oldest one already shown."""
+        try:
+            before = request.query.get("before")
+            before = int(before) if before not in (None, "") else None
+            limit = int(request.query.get("limit", 50))
+        except ValueError:
+            return error("before and limit must be numbers")
+        messages, more = hub.chat.page(before, limit)
+        return web.json_response({"messages": messages, "more": more})
+
     @routes.get("/rigshare/api/rooms")
     async def list_rooms(request):
         return web.json_response([r for r in hub.room_list() if room_access(request, hub.rooms[r["key"]])])

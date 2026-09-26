@@ -53,7 +53,7 @@ DEFAULT_CONFIG = {
     "room_expiry_days": 14,
     "snapshot_interval_sec": 300,
     "snapshot_keep": 30,
-    "chat_history": 200,
+    "chat_keep": 0,  # 0 keeps the whole chat; N trims it to the last N messages at startup
 }
 
 

@@ -281,7 +281,10 @@ app.registerExtension({
             type: "custom",
             render: (el) => {
                 el.classList.add("rs-host");
-                el.append(filesPanel);
+                // Same slot element as the RigShare tab when switching between them
+                // (ComfyUI only calls destroy on unmount): take it over cleanly.
+                if (el.contains(panel.root)) panel.unmount();
+                el.replaceChildren(filesPanel);
                 if (!filesLoaded || client.online) { filesLoaded = true; filesBrowser.reload(); }
             },
         });

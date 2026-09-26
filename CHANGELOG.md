@@ -13,6 +13,12 @@
 - The Files tab has **My files**, **Shared** and, for admins, **All** tabs instead of a Home screen; the same tabs appear in the Open, Save and Move dialogs
 - Who can open a workflow now follows its folder only. For a live workflow in a folder you own, *This tab* shows **Folder access**
 
+- Chat keeps its whole history (`chat.jsonl`, `chat_keep` to trim) instead of the last 200 messages. The panel shows the latest 50 and loads older ones as you scroll up, with date dividers. The old `chat.json` is imported once
+
+### Fixed
+
+- Switching straight between the RigShare and Files sidebar tabs could leave the previous tab's content on screen
+
 ### Removed
 
 - Per-workflow access lists (restrict the folder instead). Lists set on individual workflows before are dropped
