@@ -19,6 +19,8 @@ Only the tab on screen is live. Switch to another tab and you leave the room; sw
 
 **Live** shows the tab on screen: whether it is live, who else is in it, and buttons for **Snapshot** and **History**. For a private or unsaved tab it says why it is not live. Below that is the list of **live workflows**: those someone has open right now, with their folder and the people in each one. Open any of them with the arrow. The Files tab marks live files with a green dot.
 
+**Queue** shows the run in progress and the ones waiting, each with the workflow's name, who queued it and when. The button on a row stops or removes it: your own runs, or anyone's for an admin.
+
 **People** lists who is online and which workflow they are on. The eye button *follows* someone: it jumps to their tab and keeps your view on theirs until you click or scroll the canvas.
 
 ## What syncs, and how

@@ -463,3 +463,35 @@ def test_admin_clears_chat_history(run):
             assert [m["text"] for m in history["messages"]] == [notice["text"]] and not history["more"]
             await sock.close()
     run(scenario())
+
+
+def test_queue_shows_who_launched_and_guards_cancelling(run):
+    async def scenario():
+        async with rig_server() as rig:
+            admin = await rig.setup_admin()
+            alice = await rig.add_user("alice", queue=True)
+            bob = await rig.add_user("bob", queue=True)
+            h = rig.http
+
+            async def queue(user, name):
+                r = await h.post(rig.url("/api/prompt"), json={"prompt": {"1": {}, "2": {}}},
+                                 headers={**user, "X-RigShare-Workflow": quote(name)})
+                return (await r.json())["prompt_id"]
+            a = await queue(alice, "Face swap é")
+            b = await queue(bob, "Upscale")
+            rig.ps.prompt_queue.running.append(rig.ps.prompt_queue.pending.pop(0))  # alice's starts
+
+            from rigshare_core.stats import queue_items
+            items = rig.hub.with_owners(queue_items(rig.ps))
+            assert [(i["status"], i["user"], i["workflow"], i["nodes"]) for i in items] == [
+                ("running", "alice", "Face swap é", 2), ("pending", "bob", "Upscale", 2)]
+
+            # Your own runs only, unless admin; clearing everyone's is admin-only.
+            assert (await h.post(rig.url("/api/queue"), json={"delete": [b]}, headers=alice)).status == 403
+            assert (await h.post(rig.url("/api/interrupt"), json={}, headers=bob)).status == 403, "alice's is running"
+            assert (await h.post(rig.url("/api/interrupt"), json={"prompt_id": a}, headers=alice)).status == 200
+            assert (await h.post(rig.url("/api/queue"), json={"clear": True}, headers=bob)).status == 403
+            assert (await h.post(rig.url("/api/queue"), json={"delete": [b]}, headers=bob)).status == 200
+            assert not rig.ps.prompt_queue.pending
+            assert (await h.post(rig.url("/api/queue"), json={"clear": True}, headers=admin)).status == 200
+    run(scenario())

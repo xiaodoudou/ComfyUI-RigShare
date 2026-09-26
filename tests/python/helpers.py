@@ -33,17 +33,28 @@ def enc(path):
     return quote(path, safe="")
 
 
+class FakeQueue:
+    """ComfyUI's PromptQueue, as far as RigShare reads it."""
+
+    def __init__(self):
+        self.running, self.pending, self.number = [], [], 0
+
+    def get_current_queue_volatile(self):
+        return list(self.running), list(self.pending)
+
+
 class FakePromptServer:
     def __init__(self):
         self.app = web.Application()
         self.sent = []
+        self.prompt_queue = FakeQueue()
 
     def send_sync(self, event, data, sid=None):
         self.sent.append((event, sid))
 
 
-def comfy_routes(user_root):
-    """Minimal ComfyUI /userdata routes for the single default user."""
+def comfy_routes(user_root, queue=None):
+    """Minimal ComfyUI /userdata routes for the single default user, plus the queue."""
 
     def resolve(name):
         if "%" in name:
@@ -83,6 +94,24 @@ def comfy_routes(user_root):
     async def ok(request):
         return web.json_response({"ok": True})
 
+    async def prompt(request):
+        if request.method != "POST" or queue is None:
+            return web.json_response({"ok": True})
+        body = await request.json() if request.body_exists else {}
+        queue.number += 1
+        prompt_id = f"p{queue.number}"
+        queue.pending.append((queue.number, prompt_id, (body or {}).get("prompt") or {"1": {}}, {}, []))
+        return web.json_response({"prompt_id": prompt_id, "number": queue.number, "node_errors": {}})
+
+    async def queue_route(request):
+        body = await request.json() if request.body_exists else {}
+        if queue is not None:
+            gone = set((body or {}).get("delete") or [])
+            queue.pending = [e for e in queue.pending if e[1] not in gone]
+            if (body or {}).get("clear"):
+                queue.pending = []
+        return web.Response(status=200)
+
     table = web.RouteTableDef()
     for prefix in ("", "/api"):
         table.get(prefix + "/userdata")(listing)
@@ -90,7 +119,9 @@ def comfy_routes(user_root):
         table.post(prefix + "/userdata/{file}")(post)
         table.delete(prefix + "/userdata/{file}")(delete)
         table.post(prefix + "/userdata/{file}/move/{dest}")(move)
-        table.route("*", prefix + "/prompt")(ok)
+        table.route("*", prefix + "/prompt")(prompt)
+        table.post(prefix + "/queue")(queue_route)
+        table.post(prefix + "/interrupt")(ok)
         table.route("*", prefix + "/manager/{tail:.*}")(ok)
         table.route("*", prefix + "/customnode/{tail:.*}")(ok)
     return table
@@ -184,7 +215,7 @@ async def rig_server(config=None, workspace=True, setup=None):
     if workspace:
         hub.workspace = Workspace(store, os.path.join(user_root, "workflows"))
     routes.setup(ps, store, hub)
-    ps.app.add_routes(comfy_routes(user_root))
+    ps.app.add_routes(comfy_routes(user_root, ps.prompt_queue))
     if setup:
         setup(ps.app)
     server = TestServer(ps.app, host="127.0.0.1")

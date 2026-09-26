@@ -10,8 +10,9 @@ const ICON_URL = new URL("./assets/icon.svg", import.meta.url).href;
 
 const VIEWS = [
     { id: "workflows", icon: "pi-share-alt", label: "Live" },
-    { id: "people", icon: "pi-users", label: "People" },
     { id: "chat", icon: "pi-comments", label: "Chat" },
+    { id: "people", icon: "pi-users", label: "People" },
+    { id: "queue", icon: "pi-list", label: "Queue" },
     { id: "server", icon: "pi-server", label: "Server" },
     { id: "admin", icon: "pi-shield", label: "Admin", admin: true },
 ];
@@ -60,7 +61,10 @@ export class RigSharePanel {
         client.on("status", () => this.render());
         client.on("self", () => this.render());
         client.on("presence", () => this.renderSoft());
-        client.on("stats", () => { if (this.view === "server") this.renderBody(); });
+        client.on("stats", () => {
+            if (this.view === "server" || this.view === "queue") this.renderBody();
+            this.renderNav(); // queue count
+        });
         client.on("chat-history", () => this.renderChatLog());
         client.on("chat", (m) => this.onChat(m));
         sync.addEventListener("state", () => { if (this.view === "workflows") this.renderBody(); });
@@ -171,6 +175,7 @@ export class RigSharePanel {
             people: c.users.length || null,
             chat: this.unread || null,
             workflows: c.rooms?.length || null,
+            queue: c.stats?.queue_items?.length || null,
         };
         this.nav.replaceChildren(...VIEWS.filter((v) => !v.admin || c.perms.admin).map((v) =>
             h("button", {
@@ -199,6 +204,7 @@ export class RigSharePanel {
             people: () => this.peopleView(),
             chat: () => [this.chatView],
             server: () => this.serverView(),
+            queue: () => this.queueView(),
             admin: () => this.adminView(),
             account: () => this.accountView(),
         };
@@ -565,6 +571,44 @@ export class RigSharePanel {
     }
 
     // ----- server ---------------------------------------------------------
+
+    // ----- queue ----------------------------------------------------------
+
+    queueView() {
+        const c = this.client;
+        const items = c.stats?.queue_items;
+        if (items == null) return [this.section("pi-list", "Queue", h("p", { class: "rs-muted" }, "Waiting for the server…"))];
+        const running = items.filter((it) => it.status === "running");
+        const pending = items.filter((it) => it.status === "pending");
+        return [
+            this.section("pi-play", "Running", ...(running.length ? running.map((it) => this.queueRow(it)) : [h("p", { class: "rs-muted" }, "Nothing running.")])),
+            this.section("pi-list", `Pending${pending.length ? ` (${pending.length})` : ""}`,
+                ...(pending.length ? pending.map((it, i) => this.queueRow(it, i + 1)) : [h("p", { class: "rs-muted" }, "Nothing waiting.")])),
+        ];
+    }
+
+    queueRow(it, position) {
+        const c = this.client;
+        const online = it.user ? c.users.find((u) => u.key === it.user) : null;
+        const who = it.name || (it.user ? `@${it.user}` : "Unknown");
+        const mine = it.user && it.user === c.self?.key;
+        const canCancel = c.perms.queue && (mine || c.perms.admin);
+        const running = it.status === "running";
+        const meta = [position ? `#${position}` : null, `${it.nodes} nodes`, it.at ? `queued ${timeAgo(it.at * 1000)}` : null].filter(Boolean).join(" · ");
+        return h("div", { class: `rs-row-item rs-queue-row ${running ? "running" : ""}` },
+            h("span", { class: "rs-avatar", style: `background:${online?.color ?? "var(--rs-border)"}`, title: who }, initials(who)),
+            h("div", { class: "rs-grow rs-min0" },
+                h("div", { class: "rs-name rs-ellipsis" }, it.workflow || "Workflow",
+                    running ? h("i", { class: "pi pi-spin pi-spinner rs-inline-icon rs-muted", title: "Running" }) : null),
+                h("div", { class: "rs-muted rs-small rs-ellipsis" }, `${who}${mine ? " (you)" : ""}`),
+                h("div", { class: "rs-muted rs-small" }, meta)),
+            canCancel ? h("button", {
+                class: "rs-btn rs-btn-icon rs-danger", title: running ? "Stop this run" : "Remove from the queue",
+                onclick: () => this.run(() => running
+                    ? c.request("POST", "/api/interrupt", { prompt_id: it.id })
+                    : c.request("POST", "/api/queue", { delete: [it.id] }), running ? "Stopping…" : "Removed from the queue"),
+            }, h("i", { class: `pi ${running ? "pi-stop" : "pi-times"}` })) : null);
+    }
 
     serverView() {
         const st = this.client.stats;

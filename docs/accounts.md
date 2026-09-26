@@ -6,7 +6,7 @@
 |---|---|
 | *(none)*, a viewer | Watch shared workflows, chat, follow people, open snapshots as private copies |
 | **Edit** | Change shared workflows, save or rename workflow files, take and restore snapshots, upload files |
-| **Queue** | Queue prompts, interrupt, free memory |
+| **Queue** | Queue prompts, stop or remove your own runs, free memory. Stopping or removing someone else's, or clearing the queue, needs *Admin* |
 | **Manager** | Open ComfyUI Manager: install, update or remove custom nodes and models, snapshots, restart |
 | **Admin** | Everything, plus deleting workflow files, accounts and server settings |
 

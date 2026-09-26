@@ -15,6 +15,7 @@ import json
 import logging
 import secrets
 import time
+from collections import OrderedDict
 
 from aiohttp import web, WSMsgType
 
@@ -106,6 +107,7 @@ class Hub:
         self.stats = None
         self._task = None
         self.workspace = None  # set by __init__ (folders, private spaces)
+        self.queue_owners = OrderedDict()  # prompt_id -> {user, name, workflow, at}
 
     # ----- lifecycle ----------------------------------------------------
 
@@ -142,9 +144,38 @@ class Hub:
                 continue
             try:
                 self.stats = await loop.run_in_executor(None, collect_stats, self.server)
+                self.stats["queue_items"] = self.with_owners(self.stats.get("queue_items"))
                 await self.broadcast({"type": "stats", "stats": self.stats})
             except Exception as e:
                 log.debug(f"[RigShare] stats error: {e}")
+
+    # ----- queue ----------------------------------------------------------
+
+    def record_prompt(self, prompt_id, user, workflow):
+        """Remember who queued a prompt (ComfyUI itself doesn't)."""
+        if not prompt_id:
+            return
+        self.queue_owners[prompt_id] = {
+            "user": user["username"] if user else None,
+            "name": (user.get("display_name") or user["username"]) if user else None,
+            "workflow": clean_text(workflow, 120) or None, "at": int(time.time())}
+        while len(self.queue_owners) > 2000:
+            self.queue_owners.popitem(last=False)
+
+    def owner_of(self, prompt_id):
+        return (self.queue_owners.get(prompt_id) or {}).get("user")
+
+    def with_owners(self, items):
+        if items is None:
+            return None
+        return [{**it, **(self.queue_owners.get(it["id"]) or {})} for it in items]
+
+    def running_prompt_ids(self):
+        try:
+            running, _ = self.server.prompt_queue.get_current_queue_volatile()
+            return [entry[1] for entry in running]
+        except Exception:
+            return []
 
     def snapshot(self, room, author, label=None):
         if room.doc is None:

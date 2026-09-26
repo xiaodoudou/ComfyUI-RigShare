@@ -51,6 +51,23 @@ def _gpus():
     return out
 
 
+def queue_items(server):
+    """Running and pending prompts: [{id, number, status, nodes}], running first."""
+    try:
+        running, pending = server.prompt_queue.get_current_queue_volatile()
+    except Exception:
+        return None
+    items = []
+    for status, entries in (("running", running), ("pending", sorted(pending, key=lambda e: e[0]))):
+        for entry in entries:
+            try:
+                prompt = entry[2] if isinstance(entry[2], dict) else {}
+                items.append({"id": entry[1], "number": entry[0], "status": status, "nodes": len(prompt)})
+            except (IndexError, TypeError):
+                continue
+    return items
+
+
 def _queue(server):
     try:
         running, pending = server.prompt_queue.get_current_queue_volatile()
@@ -76,4 +93,5 @@ def collect_stats(server=None):
         stats["gpus"] = []
     if server is not None:
         stats["queue"] = _queue(server)
+        stats["queue_items"] = queue_items(server)
     return stats

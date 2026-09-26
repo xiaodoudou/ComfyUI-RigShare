@@ -51,12 +51,18 @@ function setting(id, fallback) {
     }
 }
 
-function installAuthHeaders(client) {
+function installAuthHeaders(client, sync) {
     const original = api.fetchApi.bind(api);
     api.fetchApi = (route, options = {}) => {
         let headers = options.headers || {};
         if (headers instanceof Headers) headers = Object.fromEntries(headers.entries());
-        return original(route, { ...options, headers: { ...headers, ...client.authHeaders() } });
+        headers = { ...headers, ...client.authHeaders() };
+        // Queueing: name the workflow, so the Queue tab can show what each run is.
+        if (route === "/prompt" && (options.method || "GET").toUpperCase() === "POST") {
+            const wf = sync.store?.activeWorkflow;
+            if (wf) headers["X-RigShare-Workflow"] = encodeURIComponent(sync.tabName(wf));
+        }
+        return original(route, { ...options, headers });
     };
 }
 
@@ -297,7 +303,7 @@ app.registerExtension({
         panel.chatToasts = setting("RigShare.ChatToasts", false);
 
         client.on("toast", (t) => app.extensionManager?.toast?.add({ life: 4000, ...t }));
-        installAuthHeaders(client);
+        installAuthHeaders(client, sync);
         installQueueGuard(client);
         installManagerGuard(client);
         installComfyAccountGuard(client);

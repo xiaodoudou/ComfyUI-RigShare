@@ -8,6 +8,7 @@ import json
 import logging
 import os
 import time
+from urllib.parse import unquote
 from collections import defaultdict
 
 from aiohttp import web
@@ -616,6 +617,34 @@ def setup(server, store, hub):
         action = {"GET": "get", "HEAD": "get", "POST": "save", "DELETE": "delete"}.get(request.method)
         return (action, src, None) if action else None
 
+    def api_path(request):
+        return request.path[4:] if request.path.startswith("/api/") else request.path
+
+    async def check_queue_ownership(request):
+        """Cancelling a queued prompt or stopping the running one: your own, unless admin."""
+        if request.method != "POST" or api_path(request) not in ("/queue", "/interrupt"):
+            return None
+        if trusted(request.remote or "") or perms_for(request).get("admin"):
+            return None
+        user = current_user(request)
+        me = user["username"] if user else None
+        try:
+            body = await request.json() if request.body_exists else {}
+        except ValueError:
+            body = {}
+        body = body if isinstance(body, dict) else {}
+        if api_path(request) == "/queue":
+            if body.get("clear"):
+                return "only admins can clear the whole queue"
+            ids = body.get("delete") or []
+        else:
+            ids = [body["prompt_id"]] if body.get("prompt_id") else hub.running_prompt_ids()
+        for prompt_id in ids:
+            owner = hub.owner_of(prompt_id)
+            if owner and owner != me:
+                return "you can only cancel your own prompts"
+        return None
+
     def snapshot_saved_file(request, path, body):
         if not path.endswith(".json") or Workspace.workflows_rel(path) is None:
             return
@@ -726,9 +755,19 @@ def setup(server, store, hub):
                                        "details": "", "extra_info": {}}, "node_errors": {}},
                             status=403)
                     break
+        refusal = await check_queue_ownership(request)
+        if refusal:
+            return web.json_response({"error": f"RigShare: {refusal}"}, status=403)
         if userdata and userdata[0] == "save":
             await request.read()  # keep the body for the snapshot below (aiohttp caches it)
         response = await handler(request)
+        # Remember who queued each prompt, for the Queue tab.
+        if request.method == "POST" and api_path(request) == "/prompt" and getattr(response, "status", 0) == 200:
+            try:
+                prompt_id = json.loads(response.body).get("prompt_id")
+            except (ValueError, TypeError, AttributeError):
+                prompt_id = None
+            hub.record_prompt(prompt_id, current_user(request), unquote(request.headers.get("X-RigShare-Workflow", "")))
         # Every save of a workflow keeps a snapshot, named after when it was saved.
         if userdata and userdata[0] == "save" and getattr(response, "status", 0) == 200:
             snapshot_saved_file(request, userdata[1], await request.read())

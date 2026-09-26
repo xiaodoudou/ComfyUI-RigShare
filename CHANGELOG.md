@@ -4,6 +4,8 @@
 
 ### Added
 
+- **Queue** tab: what is running and waiting, with the workflow's name and who queued it. Cancel your own runs from there; admins can cancel anyone's. The server enforces it too: cancelling someone else's prompt, or clearing the whole queue, needs *Admin*
+- Panel tabs in a new order: Live, Chat, People, Queue, Server, Admin
 - Admins can clear the whole chat history (*Admin → Chat*, or `DELETE /rigshare/api/chat`). Everyone's chat empties at once, followed by a notice saying who cleared it
 
 ### Fixed
