@@ -607,7 +607,7 @@ export class RigSharePanel {
                 onclick: () => this.run(() => running
                     ? c.request("POST", "/api/interrupt", { prompt_id: it.id })
                     : c.request("POST", "/api/queue", { delete: [it.id] }), running ? "Stopping…" : "Removed from the queue"),
-            }, h("i", { class: `pi ${running ? "pi-stop" : "pi-times"}` })) : null);
+            }, running ? h("span", { class: "rs-stop-icon" }) : h("i", { class: "pi pi-times" })) : null);
     }
 
     serverView() {

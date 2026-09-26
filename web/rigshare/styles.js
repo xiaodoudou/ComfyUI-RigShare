@@ -263,6 +263,7 @@ body.rs-no-manager [aria-label="ComfyUI Manager"] { display: none !important; }
 .rs-view-chip { display: inline-flex; align-items: center; gap: 3px; margin-left: 6px; font-size: 10.5px; padding: 0 6px; }
 .rs-view-chip .rs-comfy-icon { font-size: 11px; }
 .rs-view-chip.rs-view-app { color: var(--rs-accent); border-color: var(--rs-accent); }
+.rs-stop-icon { display: block; width: 10px; height: 10px; border-radius: 2px; background: currentColor; }
 .rs-cursor-layer { position: fixed; inset: 0; pointer-events: none; z-index: 900; overflow: hidden; }
 .rs-cursor { position: absolute; left: 0; top: 0; will-change: transform; transition: transform 70ms linear; }
 .rs-cursor svg { display: block; filter: drop-shadow(0 1px 1px rgb(0 0 0 / .4)); }
