@@ -440,3 +440,26 @@ def test_every_save_keeps_a_snapshot(run):
             await h.post(rig.url(f"/api/userdata/{enc(path)}"), data=b'{"nodes": []}', headers=viewer)
             assert len(rig.store.list_snapshots("file:" + path)) == 2
     run(scenario())
+
+
+def test_admin_clears_chat_history(run):
+    async def scenario():
+        async with rig_server() as rig:
+            admin = await rig.setup_admin()
+            alice = await rig.add_user("alice", edit=True)
+            sock = await rig.ws("alice")
+            for i in range(5):
+                await sock.send({"type": "chat", "text": f"hi {i}"})
+            await asyncio.sleep(0.2)
+            await sock.drain()
+            assert (await rig.http.delete(rig.url("/rigshare/api/chat"), headers=alice)).status == 403, "admins only"
+            assert (await rig.http.delete(rig.url("/rigshare/api/chat"), headers=admin)).status == 200
+            msgs = await sock.drain()
+            kinds = [m["type"] for m in msgs]
+            assert "chat_cleared" in kinds and kinds.index("chat_cleared") < kinds.index("chat")
+            notice = next(m for m in msgs if m["type"] == "chat")["message"]
+            assert notice["system"] and "cleared the chat history" in notice["text"] and notice["seq"] == 0
+            history = await (await rig.http.get(rig.url("/rigshare/api/chat"), headers=alice)).json()
+            assert [m["text"] for m in history["messages"]] == [notice["text"]] and not history["more"]
+            await sock.close()
+    run(scenario())

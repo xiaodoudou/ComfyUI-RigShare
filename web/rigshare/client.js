@@ -146,6 +146,11 @@ export class RigClient extends EventTarget {
                 this.stats = msg.stats;
                 this.emit("stats", msg.stats);
                 break;
+            case "chat_cleared":
+                this.chat = [];
+                this.chatMore = false;
+                this.emit("chat-history", this.chat);
+                break;
             case "chat":
                 this.chat.push(msg.message);
                 this.emit("chat", msg.message);

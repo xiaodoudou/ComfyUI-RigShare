@@ -356,6 +356,13 @@ def setup(server, store, hub):
         messages, more = hub.chat.page(before, limit)
         return web.json_response({"messages": messages, "more": more})
 
+    @routes.delete("/rigshare/api/chat")
+    async def clear_chat(request):
+        admin = require_admin(request)
+        await hub.clear_chat(admin.get("display_name") or admin["username"])
+        log.info(f"[RigShare] {admin['username']} cleared the chat history")
+        return web.json_response({"ok": True})
+
     @routes.get("/rigshare/api/rooms")
     async def list_rooms(request):
         return web.json_response([r for r in hub.room_list() if room_access(request, hub.rooms[r["key"]])])

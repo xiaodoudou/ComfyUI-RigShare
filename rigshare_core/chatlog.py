@@ -57,6 +57,13 @@ class ChatLog:
         os.replace(tmp, self.path)
         self._index()
 
+    def clear(self):
+        """Delete the whole history; numbering starts again at 0."""
+        with self._lock:
+            with open(self.path, "w", encoding="utf-8"):
+                pass
+            self.offsets = []
+
     def __len__(self):
         return len(self.offsets)
 

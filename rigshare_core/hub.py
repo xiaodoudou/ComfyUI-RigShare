@@ -381,6 +381,12 @@ class Hub:
     async def broadcast_server(self):
         await self.broadcast({"type": "server", "server": self.server_info()})
 
+    async def clear_chat(self, by):
+        """An admin wiped the chat: everyone's history empties, then a notice says who."""
+        self.chat.clear()
+        await self.broadcast({"type": "chat_cleared"})
+        await self.system_chat(f"{by} cleared the chat history")
+
     async def system_chat(self, text):
         msg = {"id": secrets.token_hex(6), "system": True, "text": text, "ts": int(time.time() * 1000)}
         msg = self.chat.append(msg)

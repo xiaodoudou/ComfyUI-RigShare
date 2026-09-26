@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Admins can clear the whole chat history (*Admin → Chat*, or `DELETE /rigshare/api/chat`). Everyone's chat empties at once, followed by a notice saying who cleared it
+
 ### Fixed
 
 - Entering the App view closed an open RigShare or Files panel (going back to the graph kept it open). It now stays open both ways

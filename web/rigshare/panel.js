@@ -687,6 +687,14 @@ export class RigSharePanel {
         return [
             this.section("pi-users", "Accounts", this.adminAccounts, this.createAccountForm()),
             this.section("pi-cog", "Server settings", this.adminSettings),
+            this.section("pi-comments", "Chat",
+                h("p", { class: "rs-muted rs-small" }, "The whole chat history is kept. Clearing it deletes every message for everyone; it cannot be undone."),
+                h("div", { class: "rs-actions" }, h("button", {
+                    class: "rs-btn rs-danger", onclick: async () => {
+                        if (!(await this.confirm("Clear chat history", "Delete every chat message for everyone? This cannot be undone."))) return;
+                        await this.run(() => this.client.request("DELETE", "/rigshare/api/chat"), "Chat history cleared");
+                    },
+                }, h("i", { class: "pi pi-trash" }), "Clear chat history"))),
         ];
     }
 
