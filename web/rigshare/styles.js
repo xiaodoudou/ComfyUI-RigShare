@@ -253,14 +253,8 @@ body.rs-no-manager [aria-label="ComfyUI Manager"] { display: none !important; }
 .rs-dock-btn.active { color: var(--rs-accent-fg); background: var(--rs-accent); }
 .rs-dock-badge { display: none; position: absolute; top: 1px; right: 1px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
   background: #ef4444; color: #fff; font-size: 10px; line-height: 16px; font-weight: 700; }
-.rs-dock-drawer { position: fixed; top: 8px; bottom: 64px; left: 64px; width: min(380px, calc(100vw - 80px)); z-index: 1100;
-  background: var(--rs-bg); border: 1px solid var(--rs-border); border-radius: 12px; box-shadow: 0 12px 40px rgb(0 0 0 / .45); overflow: hidden; }
-.rs-dock-drawer-body { height: 100%; }
-.rs-dock-drawer .rs-header { padding-right: 40px; }
 .rs-rail-badge { position: absolute; top: -4px; right: -6px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
   background: #ef4444; color: #fff; font-size: 10px; line-height: 16px; font-weight: 700; text-align: center; }
-.rs-dock-close { position: absolute; top: 8px; right: 8px; z-index: 2; border: 0; background: none; color: var(--rs-muted); cursor: pointer; padding: 4px; }
-.rs-dock-close:hover { color: var(--rs-fg); }
 .rs-view-avatar { position: relative; overflow: visible; }
 .rs-comfy-icon { display: inline-block; width: 1em; height: 1em; flex: none; }
 .rs-view-mark { position: absolute; right: -6px; bottom: -5px; font-size: 8px; width: 13px; height: 13px; display: grid; place-items: center;

@@ -331,15 +331,12 @@ app.registerExtension({
         });
         client.on("self", () => { if (filesPanel.isConnected) filesBrowser.reload(); });
 
-        // ComfyUI's App view hides extension sidebar tabs: offer them in a dock there.
+        // ComfyUI's App view draws buttons only for its own tabs: add ours to its sidebar.
         const dock = new AppDock({
-            sync,
+            app, sync,
             views: {
-                [TAB_ID]: { icon: "pi-users", title: "RigShare", mount: (el) => panel.mount(el), unmount: () => panel.unmount() },
-                files: {
-                    icon: "pi-folder-open", title: "Files",
-                    mount: (el) => { el.replaceChildren(filesPanel); filesBrowser.reload(); },
-                },
+                [TAB_ID]: { icon: "pi-users", title: "RigShare", tabId: TAB_ID },
+                files: { icon: "pi-folder-open", title: "Files", tabId: "rigshare-files" },
             },
         });
 
