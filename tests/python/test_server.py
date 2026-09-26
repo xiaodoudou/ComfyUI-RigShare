@@ -243,3 +243,47 @@ def test_live_follows_folders(run):
             assert key2 not in rig.hub.rooms
             await alice.close(); await bob.close()
     run(scenario())
+
+
+def test_moves_follow_open_tabs(run):
+    async def scenario():
+        async with rig_server() as rig:
+            await rig.setup_admin()
+            for name in ("alice", "bob", "carol", "dave"):
+                await rig.add_user(name, edit=True)
+            H, h = rig.headers, rig.http
+            socks = {n: await rig.ws(n) for n in ("alice", "bob", "carol", "dave")}
+
+            async def moves(name):
+                return [m for m in await socks[name].drain() if m["type"] in ("path_moved", "path_closed")]
+
+            # A live file renamed: everyone who could open it is told, and its room follows.
+            await h.post(rig.url(f"/api/userdata/{enc('workflows/a.json')}"), data=b"{}", headers=H["alice"])
+            await socks["bob"].send({"type": "join", "room": "file:workflows/a.json", "name": "a", "doc": BASE_DOC})
+            await socks["bob"].until("room")
+            for sock in socks.values():
+                await sock.drain()
+            r = await h.post(rig.url(f"/api/userdata/{enc('workflows/a.json')}/move/{enc('workflows/b.json')}"), headers=H["alice"])
+            assert r.status == 200
+            assert await moves("bob") == [{"type": "path_moved", "from": "workflows/a.json", "to": "workflows/b.json"}]
+            assert "file:workflows/b.json" in rig.hub.rooms and "file:workflows/a.json" not in rig.hub.rooms
+
+            # Into a private folder: the owner follows it, the others keep a private copy.
+            r = await h.post(rig.url(f"/api/userdata/{enc('workflows/b.json')}/move/{enc('workflows/users/alice/b.json')}"), headers=H["boss"])
+            assert r.status == 200
+            assert (await moves("alice"))[0]["type"] == "path_moved"
+            assert await moves("bob") == [{"type": "path_closed", "from": "workflows/b.json"}]
+            assert not rig.hub.rooms
+
+            # A restricted shared folder renamed: people without access learn nothing.
+            await h.post(rig.url("/rigshare/api/workspace/mkdir"), json={"parent": "@shared", "name": "Team"}, headers=H["alice"])
+            await h.patch(rig.url("/rigshare/api/workspace/folders"), json={"path": "shared/Team", "restricted": True, "members": {"carol": "view"}}, headers=H["alice"])
+            for sock in socks.values():
+                await sock.drain()
+            r = await h.patch(rig.url("/rigshare/api/workspace/folders"), json={"path": "shared/Team", "name": "Crew"}, headers=H["alice"])
+            assert r.status == 200
+            assert await moves("carol") == [{"type": "path_moved", "from": "workflows/shared/Team", "to": "workflows/shared/Crew"}]
+            assert await moves("dave") == []
+            for sock in socks.values():
+                await sock.close()
+    run(scenario())

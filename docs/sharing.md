@@ -34,7 +34,8 @@ Viewers (no *Edit* permission) see a read-only canvas. Anything they change loca
 ## When a workflow stops being live
 
 - When everyone closes it, it leaves the live list. The server keeps its latest state, so the next person to open it picks up where the others left off, saved or not. That state is forgotten after 14 days without anyone opening it (`room_expiry_days`).
-- Moving it into a private folder takes it out of live sharing straight away.
+- Renaming or moving it (or its folder) keeps it live: everyone who has it open follows it to the new name, and its history and access list go with it.
+- Moving it into a private folder takes it out of live sharing straight away. Its owner's tab follows it; everyone else keeps a private copy.
 - Deleting it (admins, or the owner of its shared folder) closes it for the people who have it open. Their tabs stay as private copies, and a *Before delete* snapshot is kept.
 
 ## Who can open it

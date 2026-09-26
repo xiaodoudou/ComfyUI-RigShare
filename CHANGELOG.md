@@ -8,6 +8,7 @@
 - The **Live** list shows the workflows someone has open right now, with their folder and who is in them; the Files tab marks live files
 - A private workflow's panel offers **Move to Shared…** to take it live
 - Deleting a live file closes it for the people who have it open (a snapshot is kept); moving one into a private folder takes it out of live sharing
+- Renaming or moving a file or folder re-points everyone's open tabs to the new path, so nobody recreates it under the old name. People who can't open the new location are told nothing about it and keep a private copy
 
 ### Removed
 

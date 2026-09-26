@@ -361,6 +361,40 @@ class Hub:
                 moved.append(room.key)
         return moved
 
+    def path_access(self, path, client, key=None, room=None):
+        """May ``client`` open the workflows path (file or folder)? ``room`` adds its access list."""
+        key = client.key if key is None else key
+        if room is not None and self._room_access(room, client.kind, key, client.perms) is None:
+            return False
+        rel = Workspace.workflows_rel(path)
+        if rel is None or not self.workspace:
+            return True
+        return self.workspace.role(rel, client.kind, key, client.perms) is not None
+
+    def who_sees(self, path):
+        """Connected clients that may open ``path``; call before moving it."""
+        room = self.rooms.get("file:" + path)
+        return [c for c in self.clients.values() if c.kind and self.path_access(path, c, room=room)]
+
+    async def path_moved(self, old, new, renamed=None, seen_by=None):
+        """A workflow file or folder moved (userdata paths, e.g. ``workflows/a.json``).
+
+        Its rooms follow it, and everyone who could see the old location
+        (``seen_by``, taken before the move changed any folder settings) is told
+        where it went so their open tabs follow too, or that it went somewhere
+        they cannot open. ``renamed`` maps usernames changed by the same action.
+        """
+        room = self.rooms.get("file:" + old)
+        notes = []
+        for client in self.who_sees(old) if seen_by is None else seen_by:
+            key = (renamed or {}).get(client.key, client.key) if client.kind == "user" else client.key
+            notes.append((client, self.path_access(new, client, key=key, room=room)))
+        self.rekey_rooms("file:" + old, "file:" + new)
+        for client, follows in notes:
+            await self.send(client, {"type": "path_moved", "from": old, "to": new} if follows
+                            else {"type": "path_closed", "from": old})
+        await self.broadcast_presence()
+
     async def refresh_rooms_access(self):
         """Folder access changed: remove people from rooms they can no longer open."""
         for client in list(self.clients.values()):

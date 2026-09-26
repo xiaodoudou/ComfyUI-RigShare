@@ -91,3 +91,40 @@ test("live follows folders: saved files outside private folders only", () => {
     assert.equal(sync.privacyOf(tab("workflows/Unsaved Workflow.json", true)), "unsaved");
     assert.ok(isPrivatePath("workflows/users") && !isPrivatePath("workflows/usersx/a.json"));
 });
+
+test("a file renamed by someone else re-points the open tab and rejoins its room", async () => {
+    class Wf {
+        constructor(path) { this.updatePath(path); this.isTemporary = false; }
+        updatePath(path) { this.path = path; this.filename = path.split("/").pop(); }
+        async rename() { throw new Error("the file already moved: must not call the server"); }
+    }
+    const wf = new Wf("workflows/shared/a.json");
+    const other = new Wf("workflows/other.json");
+    const store = {
+        activeWorkflow: wf, openWorkflows: [wf, other],
+        async renameWorkflow(w, path) { await w.rename(path); }, // like ComfyUI's store
+    };
+    const sent = [];
+    const client = Object.assign(new EventTarget(), {
+        online: true, perms: { edit: true }, rooms: [], users: [],
+        on(type, fn) { this.addEventListener(type, (e) => fn(e.detail)); },
+        emit(type, detail) { this.dispatchEvent(new CustomEvent(type, { detail })); },
+        send(m) { sent.push(m); return true; },
+    });
+    const app = { extensionManager: { workflow: store }, canvas: null, loadGraphData: async () => {},
+        rootGraph: { serialize: () => ({ nodes: [], links: [], extra: {} }), extra: {}, getNodeById: () => null } };
+    const sync = new RoomSync(app, new EventTarget(), client);
+    sync.tick();
+    assert.equal(sent.at(-1).room, "file:workflows/shared/a.json");
+
+    client.emit("path_moved", { from: "workflows/shared", to: "workflows/shared2" });
+    await sync.busy;
+    assert.equal(wf.path, "workflows/shared2/a.json");
+    assert.equal(other.path, "workflows/other.json");
+    assert.ok(!Object.hasOwn(wf, "rename"), "the real rename is restored");
+    assert.equal(sent.at(-1).room, "file:workflows/shared2/a.json");
+
+    client.emit("path_closed", { from: "workflows/shared2/a.json" });
+    sync.tick();
+    assert.equal(sent.at(-1).room, null, "moved out of reach: the tab leaves the room");
+});

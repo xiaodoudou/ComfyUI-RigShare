@@ -150,6 +150,19 @@ export class RoomSync extends EventTarget {
             this.updateReadOnly();
             this.emitState();
         });
+        client.on("path_moved", (msg) => this.enqueue(() => this.followMove(msg.from, msg.to)));
+        client.on("path_closed", (msg) => {
+            // Moved somewhere we cannot open: matching tabs stay as private copies.
+            const tabs = this.tabsUnder(msg.from);
+            for (const wf of tabs) this.denied.add(`file:${wf.path}`);
+            if (tabs.includes(this.targetWf)) {
+                this.ready = false;
+                this.room = null;
+            }
+            if (tabs.length) client.emit("toast", { severity: "info", summary: "RigShare", detail: `"${this.tabName(tabs[0])}" was moved somewhere you can't open. Your tab stays as a private copy.` });
+            this.updateReadOnly();
+            this.emitState();
+        });
         client.on("presence", () => {
             // Access granted again: the room shows up in our list.
             for (const key of this.denied) if (client.rooms.some((r) => r.key === key)) this.denied.delete(key);
@@ -496,6 +509,45 @@ export class RoomSync extends EventTarget {
         if (store.renameWorkflow) await store.renameWorkflow(wf, target);
         else await wf.rename(target);
         await store.syncWorkflows?.();
+    }
+
+    /** Open saved tabs at ``path`` or inside it (a folder). */
+    tabsUnder(path) {
+        return (this.store?.openWorkflows || []).filter((wf) =>
+            !wf.isTemporary && (wf.path === path || wf.path?.startsWith(path + "/")));
+    }
+
+    /**
+     * Someone renamed or moved a file (or folder) we have open: point our tabs
+     * at the new path. The file already moved on the server, so ComfyUI's own
+     * rename runs with the server call skipped; it still updates the tab list,
+     * drafts, thumbnails and bookmarks.
+     */
+    async followMove(from, to) {
+        const store = this.store;
+        let moved = false;
+        for (const wf of this.tabsUnder(from)) {
+            const target = to + wf.path.slice(from.length);
+            if (target === wf.path) continue;
+            moved = true;
+            this.denied.delete(`file:${target}`);
+            if (store?.renameWorkflow && typeof wf.updatePath === "function") {
+                wf.rename = async (path) => { wf.updatePath(path); return wf; };
+                try {
+                    await store.renameWorkflow(wf, target);
+                } finally {
+                    delete wf.rename;
+                }
+            } else if (typeof wf.updatePath === "function") {
+                wf.updatePath(target);
+            } else {
+                wf.path = target;
+            }
+        }
+        if (!moved) return;
+        // Rejoin under the new name (or leave, if it went private).
+        this.targetKey = undefined;
+        this.tick();
     }
 
     /** Find an already-open tab for a room. */

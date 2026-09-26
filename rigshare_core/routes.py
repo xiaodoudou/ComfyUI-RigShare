@@ -294,7 +294,8 @@ def setup(server, store, hub):
             hub.rename_member(username, user["username"])
             if hub.workspace:
                 hub.workspace.rename_user(username, user["username"])
-                hub.rekey_rooms(f"file:workflows/users/{username}", f"file:workflows/users/{user['username']}")
+                await hub.path_moved(f"workflows/users/{username}", f"workflows/users/{user['username']}",
+                                     renamed={username: user["username"]})
             log.info(f"[RigShare] {admin['username']} renamed @{username} to @{user['username']}")
             await hub.refresh_identities()
         else:
@@ -389,20 +390,22 @@ def setup(server, store, hub):
     async def ws_rename_dir(request):
         body = await request.json()
         old = norm(body.get("path"))
+        seen_by = hub.who_sees("workflows/" + old)
         err, new = ws_call(lambda: ws().rename_dir(old, body.get("name"), *who(request)))
         if err:
             return err
-        hub.rekey_rooms("file:workflows/" + old, "file:workflows/" + new)
+        await hub.path_moved("workflows/" + old, "workflows/" + new, seen_by=seen_by)
         return web.json_response({"path": new})
 
     @routes.post("/rigshare/api/workspace/move-folder")
     async def ws_move_dir(request):
         body = await request.json()
         old = norm(body.get("path"))
+        seen_by = hub.who_sees("workflows/" + old)
         err, new = ws_call(lambda: ws().move_dir(old, body.get("dest", ""), *who(request)))
         if err:
             return err
-        hub.rekey_rooms("file:workflows/" + old, "file:workflows/" + new)
+        await hub.path_moved("workflows/" + old, "workflows/" + new, seen_by=seen_by)
         return web.json_response({"path": new})
 
     @routes.post("/rigshare/api/workspace/delete-folder")
@@ -458,8 +461,9 @@ def setup(server, store, hub):
                 kind, key, _ = who(request)
                 ws().set_acl(folder, acl, fallback_owner=key if kind == "user" else None)
             if body.get("name"):
+                seen_by = hub.who_sees(f"workflows/{folder}")
                 new_folder = ws().rename_folder(folder, body["name"])
-                hub.rekey_rooms(f"file:workflows/{folder}", f"file:workflows/{new_folder}")
+                await hub.path_moved(f"workflows/{folder}", f"workflows/{new_folder}", seen_by=seen_by)
                 folder = new_folder
         except ValueError as e:
             return error(str(e))
@@ -737,8 +741,7 @@ def setup(server, store, hub):
             response = filter_listing(request, response, userdata[1])
         # A file moved on disk: its live room follows it.
         if userdata and userdata[0] == "move" and getattr(response, "status", 0) == 200:
-            hub.rekey_rooms("file:" + userdata[1], "file:" + userdata[2])
-            await hub.broadcast_presence()
+            await hub.path_moved(userdata[1], userdata[2])
         if userdata and userdata[0] == "delete" and getattr(response, "status", 0) in (200, 204):
             await hub.drop_rooms("file:" + userdata[1], display(request))
         # Hide API templates: rewrite the template index ComfyUI serves.
