@@ -186,6 +186,145 @@ class Workspace:
                 "common": {"files": self._files(""), "role": "edit" if can_edit else "view"},
                 "can_create": can_edit}
 
+    # ----- browsing (Files tab) -------------------------------------------
+
+    def _abs(self, rel):
+        return os.path.join(self.root, *[p for p in rel.split("/") if p])
+
+    def _entry(self, rel, name, is_dir, kind, key, perms):
+        full = self._abs(rel)
+        entry = {"type": "folder" if is_dir else "file", "path": rel,
+                 "name": name if is_dir else name[:-5],
+                 "modified": int(os.path.getmtime(full)) if os.path.exists(full) else 0,
+                 "role": self.role(rel, kind, key, perms)}
+        area, folder = self.area(rel)
+        if is_dir and area == "shared" and rel == folder:
+            meta = self.folders.get(folder) or {}
+            entry.update(owner=meta.get("owner"), restricted=bool(meta.get("acl")),
+                         manage=self.can_manage(folder, kind, key, perms))
+        entry["deletable"] = self.can_delete(rel, kind, key, perms)
+        return entry
+
+    def list_dir(self, rel, kind, key, perms):
+        """One folder's content. "@shared" is the Shared root: the shared folders
+        plus the common top level. "users" (admins) lists everyone's folders.
+        Raises PermissionError / FileNotFoundError."""
+        can_edit = bool(perms.get("edit") or perms.get("admin"))
+        entries = []
+        if rel == "@shared":
+            shared_dir = self._abs("shared")
+            for name in (os.listdir(shared_dir) if os.path.isdir(shared_dir) else []):
+                path = "shared/" + name
+                if os.path.isdir(self._abs(path)) and self.folder_role(path, kind, key, perms):
+                    entries.append(self._entry(path, name, True, kind, key, perms))
+            for name in os.listdir(self.root):
+                if name in ("users", "shared") or name.startswith("."):
+                    continue
+                full = os.path.join(self.root, name)
+                if os.path.isdir(full) or name.endswith(".json"):
+                    entries.append(self._entry(name, name, os.path.isdir(full), kind, key, perms))
+            role = "edit" if can_edit else "view"
+            can_mkdir = can_edit and kind == "user"
+        else:
+            rel = norm(rel)
+            if rel == "users" and not perms.get("admin"):
+                raise PermissionError("You do not have access to this folder")
+            role = self.role(rel, kind, key, perms)
+            if role is None:
+                raise PermissionError("You do not have access to this folder")
+            if kind == "user" and rel == "users/" + str(key):
+                self.ensure_private(key)
+            base = self._abs(rel)
+            if not os.path.isdir(base):
+                raise FileNotFoundError("This folder no longer exists")
+            for name in os.listdir(base):
+                if name.startswith("."):
+                    continue
+                child = rel + "/" + name if rel else name
+                full = os.path.join(base, name)
+                if not (os.path.isdir(full) or name.endswith(".json")):
+                    continue
+                if self.role(child, kind, key, perms) is None:
+                    continue
+                entries.append(self._entry(child, name, os.path.isdir(full), kind, key, perms))
+            can_mkdir = role == "edit" and rel not in ("", "users", "shared")
+        entries.sort(key=lambda e: (e["type"] != "folder", e["name"].lower()))
+        return {"path": rel, "role": role, "entries": entries, "can_mkdir": can_mkdir}
+
+    def make_dir(self, parent, name, kind, key, perms):
+        """New folder. In the Shared root it becomes a shared folder you own."""
+        name = (name or "").strip()
+        if not FOLDER_NAME_RE.match(name) or name in (".", ".."):
+            raise ValueError("Folder names: up to 64 letters, digits, spaces and . _ - ( )")
+        if parent == "@shared":
+            if kind != "user" or not (perms.get("edit") or perms.get("admin")):
+                raise PermissionError("You need the Edit permission to create shared folders")
+            return self.create_folder(name, key)
+        parent = norm(parent)
+        if parent in ("", "users", "shared") or self.role(parent, kind, key, perms) != "edit":
+            raise PermissionError("You cannot create a folder here")
+        path = parent + "/" + name
+        if os.path.exists(self._abs(path)):
+            raise ValueError("A folder with that name already exists")
+        os.makedirs(self._abs(path))
+        return path
+
+    def _top_level(self, rel):
+        area, folder = self.area(rel)
+        return (area == "shared" and rel == folder) or (area == "private" and rel.count("/") < 2) \
+            or rel in ("users", "shared")
+
+    def rename_dir(self, rel, name, kind, key, perms):
+        rel = norm(rel)
+        area, folder = self.area(rel)
+        if area == "shared" and rel == folder:
+            if not self.can_manage(folder, kind, key, perms):
+                raise PermissionError("Only the folder's owner or an admin can rename it")
+            return self.rename_folder(folder, name)
+        name = (name or "").strip()
+        if not FOLDER_NAME_RE.match(name) or name in (".", ".."):
+            raise ValueError("Folder names: up to 64 letters, digits, spaces and . _ - ( )")
+        parent = posixpath.dirname(rel)
+        if self._top_level(rel) or not self.can_delete(rel, kind, key, perms) \
+                or self.role(parent, kind, key, perms) != "edit":
+            raise PermissionError("You cannot rename this folder")
+        new = parent + "/" + name if parent else name
+        if os.path.exists(self._abs(new)):
+            raise ValueError("A folder with that name already exists")
+        os.rename(self._abs(rel), self._abs(new))
+        return new
+
+    def move_dir(self, rel, dest_parent, kind, key, perms):
+        rel, dest_parent = norm(rel), ("" if dest_parent == "@shared" else norm(dest_parent))
+        if self._top_level(rel):
+            raise PermissionError("Top-level folders cannot be moved")
+        if dest_parent == rel or dest_parent.startswith(rel + "/"):
+            raise ValueError("A folder cannot be moved into itself")
+        if dest_parent in ("users", "shared") or not self.can_delete(rel, kind, key, perms) \
+                or self.role(dest_parent, kind, key, perms) != "edit":
+            raise PermissionError("You cannot move this folder there")
+        new = dest_parent + "/" + posixpath.basename(rel) if dest_parent else posixpath.basename(rel)
+        if os.path.exists(self._abs(new)):
+            raise ValueError("A folder with that name already exists there")
+        os.rename(self._abs(rel), self._abs(new))
+        return new
+
+    def delete_dir(self, rel, kind, key, perms):
+        rel = norm(rel)
+        area, folder = self.area(rel)
+        if area == "private" and rel.count("/") < 2 or rel in ("", "users", "shared"):
+            raise PermissionError("This folder cannot be deleted")
+        if not self.can_delete(rel, kind, key, perms):
+            raise PermissionError("Only the folder's owner or an admin can delete it")
+        has_files = any(files for _, _, files in os.walk(self._abs(rel)))
+        own_private = area == "private" and kind == "user" and folder == key
+        if has_files and not own_private:
+            raise ValueError("Move or delete the workflows inside it first")
+        shutil.rmtree(self._abs(rel), ignore_errors=True)
+        if area == "shared" and rel == folder:
+            self.folders.pop(folder, None)
+            self.save()
+
     # ----- changes ------------------------------------------------------
 
     def ensure_private(self, username):

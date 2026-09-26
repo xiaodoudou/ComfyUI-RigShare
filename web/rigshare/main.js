@@ -9,6 +9,8 @@ import { Presence } from "./presence.js";
 import { RigSharePanel } from "./panel.js";
 import { STYLES } from "./styles.js";
 import { installSaveDialog } from "./save-dialog.js";
+import { FilesBrowser, openFromWorkspace } from "./files.js";
+import { h } from "./ui.js";
 
 const TAB_ID = "rigshare";
 const ICON_CLASS = "rigshare-tab-icon";
@@ -201,7 +203,22 @@ app.registerExtension({
         },
     ],
 
+    menuCommands: [
+        { path: ["Workflow"], commands: ["RigShare.OpenFromWorkspace"] },
+    ],
+
+    keybindings: [
+        { combo: { key: "o", ctrl: true, alt: true }, commandId: "RigShare.OpenFromWorkspace" },
+    ],
+
     commands: [
+        {
+            id: "RigShare.OpenFromWorkspace",
+            label: "Open from RigShare…",
+            menubarLabel: "Open from RigShare…",
+            icon: "pi pi-folder-open",
+            function: () => rig && openFromWorkspace(rig),
+        },
         {
             id: "RigShare.OpenChat",
             label: "RigShare: Open chat",
@@ -242,7 +259,7 @@ app.registerExtension({
         installQueueGuard(client);
         installManagerGuard(client);
         installComfyAccountGuard(client);
-        installSaveDialog(app, api, client);
+        installSaveDialog(app, api, client, sync);
         presence.install();
 
         app.extensionManager.registerSidebarTab({
@@ -256,6 +273,43 @@ app.registerExtension({
             render: (el) => panel.mount(el),
             destroy: () => panel.unmount(),
         });
+
+        // Files: its own sidebar tab, Drive-style.
+        const filesBrowser = new FilesBrowser({
+            app, client, sync, mode: "browse",
+            onOpenFile: (path) => sync.openPath(path).catch((e) => client.emit("toast", { severity: "error", summary: "RigShare", detail: e.message })),
+            accessEditor: (folder, close) => panel.accessEditorFor({
+                load: () => client.request("GET", `/rigshare/api/workspace/folder?path=${encodeURIComponent(folder)}`),
+                save: (restricted, members) => client.request("PATCH", "/rigshare/api/workspace/folders", { path: folder, restricted, members }),
+                everyoneHint: "Anyone with an account can open its workflows, with their usual permissions",
+                close, draftKey: "folderDraft",
+            }),
+        });
+        const filesPanel = h("div", { class: "rs-panel rs-files-panel" },
+            h("div", { class: "rs-header" },
+                h("div", { class: "rs-title" }, h("i", { class: "pi pi-folder-open rs-files-logo" }),
+                    h("div", { class: "rs-title-text" }, h("div", { class: "rs-title-name" }, "Files"),
+                        h("div", { class: "rs-status" }, "Your folders and shared ones"))),
+                h("button", {
+                    class: "rs-btn", title: "Open a workflow file from this computer",
+                    onclick: () => app.extensionManager.command.execute("Comfy.OpenWorkflow"),
+                }, h("i", { class: "pi pi-upload" }), "From computer")),
+            h("div", { class: "rs-body" }, filesBrowser.el));
+        let filesLoaded = false;
+        app.extensionManager.registerSidebarTab({
+            id: "rigshare-files",
+            icon: "pi pi-folder-open",
+            title: "Files",
+            tooltip: "RigShare files: My files and Shared",
+            label: "Files",
+            type: "custom",
+            render: (el) => {
+                el.classList.add("rs-host");
+                el.append(filesPanel);
+                if (!filesLoaded || client.online) { filesLoaded = true; filesBrowser.reload(); }
+            },
+        });
+        client.on("self", () => { if (filesPanel.isConnected) filesBrowser.reload(); });
 
         // The registered tab object is wrapped by Vue; mutating it through the
         // store keeps the unread badge reactive.

@@ -362,6 +362,55 @@ def setup(server, store, hub):
             return error("Not logged in", 401)
         return web.json_response(ws().tree(*who(request)))
 
+    def ws_call(fn):
+        try:
+            return None, fn()
+        except PermissionError as e:
+            return error(str(e), 403), None
+        except FileNotFoundError as e:
+            return error(str(e), 404), None
+        except ValueError as e:
+            return error(str(e)), None
+
+    @routes.get("/rigshare/api/workspace/list")
+    async def ws_list(request):
+        if not current_user(request):
+            return error("Not logged in", 401)
+        err, result = ws_call(lambda: ws().list_dir(request.query.get("path", ""), *who(request)))
+        return err or web.json_response(result)
+
+    @routes.post("/rigshare/api/workspace/mkdir")
+    async def ws_mkdir(request):
+        body = await request.json()
+        err, path = ws_call(lambda: ws().make_dir(body.get("parent", ""), body.get("name"), *who(request)))
+        return err or web.json_response({"path": path})
+
+    @routes.post("/rigshare/api/workspace/rename-folder")
+    async def ws_rename_dir(request):
+        body = await request.json()
+        old = norm(body.get("path"))
+        err, new = ws_call(lambda: ws().rename_dir(old, body.get("name"), *who(request)))
+        if err:
+            return err
+        hub.rekey_rooms("file:workflows/" + old, "file:workflows/" + new)
+        return web.json_response({"path": new})
+
+    @routes.post("/rigshare/api/workspace/move-folder")
+    async def ws_move_dir(request):
+        body = await request.json()
+        old = norm(body.get("path"))
+        err, new = ws_call(lambda: ws().move_dir(old, body.get("dest", ""), *who(request)))
+        if err:
+            return err
+        hub.rekey_rooms("file:workflows/" + old, "file:workflows/" + new)
+        return web.json_response({"path": new})
+
+    @routes.post("/rigshare/api/workspace/delete-folder")
+    async def ws_delete_dir(request):
+        body = await request.json()
+        err, _ = ws_call(lambda: ws().delete_dir(body.get("path", ""), *who(request)))
+        return err or web.json_response({"ok": True})
+
     @routes.get("/rigshare/api/workspace/folder")
     async def folder_acl(request):
         folder = norm(request.query.get("path"))

@@ -8,7 +8,6 @@ const ICON_URL = new URL("./assets/icon.svg", import.meta.url).href;
 
 const VIEWS = [
     { id: "workflows", icon: "pi-share-alt", label: "Live" },
-    { id: "files", icon: "pi-folder", label: "Files" },
     { id: "people", icon: "pi-users", label: "People" },
     { id: "chat", icon: "pi-comments", label: "Chat" },
     { id: "server", icon: "pi-server", label: "Server" },
@@ -183,14 +182,13 @@ export class RigSharePanel {
         }
         const views = {
             workflows: () => this.workflowsView(),
-            files: () => this.filesView(),
             people: () => this.peopleView(),
             chat: () => [this.chatView],
             server: () => this.serverView(),
             admin: () => this.adminView(),
             account: () => this.accountView(),
         };
-        if (this.view === "admin" && !c.perms.admin) this.view = "workflows";
+        if ((this.view === "admin" && !c.perms.admin) || !VIEWS.some((v) => v.id === this.view) && this.view !== "account") this.view = "workflows";
         const scroll = this.body.scrollTop;
         this.body.replaceChildren(...(views[this.view] ?? views.workflows)().filter(Boolean));
         this.body.scrollTop = scroll;
@@ -389,119 +387,6 @@ export class RigSharePanel {
         });
         return this.section("pi-share-alt", "Shared workflows",
             ...(rows.length ? rows : [h("p", { class: "rs-muted" }, "Nothing shared yet. Open a saved workflow or edit a tab.")]));
-    }
-
-    // ----- files ----------------------------------------------------------
-
-    filesView() {
-        this.filesEl ??= h("div", {});
-        this.loadFiles();
-        return [this.filesEl];
-    }
-
-    async loadFiles() {
-        const tree = await this.run(() => this.client.request("GET", "/rigshare/api/workspace"));
-        if (!tree) return;
-        this.tree = tree;
-        const destinations = [
-            tree.private ? { folder: tree.private.path, label: "My files" } : null,
-            ...tree.shared.filter((f) => f.role === "edit").map((f) => ({ folder: f.path, label: f.name })),
-            tree.common.role === "edit" ? { folder: "", label: "Common" } : null,
-        ].filter(Boolean);
-
-        const fileRow = (file, folder, canMoveOut) => h("div", { class: "rs-row-item rs-file" },
-            h("i", { class: "pi pi-file rs-row-icon" }),
-            h("div", { class: "rs-grow rs-min0" },
-                h("div", { class: "rs-name rs-ellipsis", title: file.path.slice("workflows/".length) }, file.name.replace(/\.json$/, "")),
-                h("div", { class: "rs-muted rs-small" }, timeAgo(file.modified * 1000))),
-            canMoveOut && destinations.length > 1 ? h("select", {
-                class: "rs-input rs-select", title: "Move to another folder",
-                onchange: async (e) => {
-                    const dest = e.target.value;
-                    e.target.value = "__";
-                    if (dest === "__") return;
-                    const base = file.path.split("/").pop();
-                    const target = dest ? `workflows/${dest}/${base}` : `workflows/${base}`;
-                    await this.run(() => this.sync.movePath(file.path, target), "Moved");
-                    this.loadFiles();
-                },
-            }, h("option", { value: "__" }, "Move to…"), ...destinations.filter((d) => d.folder !== folder).map((d) =>
-                h("option", { value: d.folder }, d.label))) : null,
-            h("button", { class: "rs-btn rs-btn-icon", title: "Open", onclick: () => this.run(() => this.sync.openPath(file.path)) },
-                h("i", { class: "pi pi-arrow-right" })));
-
-        const empty = (text) => h("p", { class: "rs-muted rs-small" }, text);
-        const sections = [];
-        if (tree.private) {
-            sections.push(this.section("pi-user", "My files",
-                h("p", { class: "rs-muted rs-small" }, "Only you (and admins) can see these."),
-                ...(tree.private.files.length ? tree.private.files.map((f) => fileRow(f, tree.private.path, true)) : [empty("Nothing here yet. Save a workflow and choose My files.")])));
-        }
-
-        const folderBlocks = tree.shared.map((f) => {
-            const open = this.openFolders?.has(f.path);
-            const owner = f.owner ? this.client.users.find((u) => u.key === f.owner)?.name ?? `@${f.owner}` : null;
-            const head = h("div", { class: "rs-row-item rs-folder" },
-                h("button", { class: "rs-btn rs-btn-icon rs-btn-ghost", title: open ? "Collapse" : "Expand", onclick: () => {
-                    this.openFolders ??= new Set();
-                    open ? this.openFolders.delete(f.path) : this.openFolders.add(f.path);
-                    this.loadFiles();
-                } }, h("i", { class: `pi ${open ? "pi-chevron-down" : "pi-chevron-right"}` })),
-                h("i", { class: `pi ${f.restricted ? "pi-lock" : "pi-folder"} rs-row-icon` }),
-                h("div", { class: "rs-grow rs-min0" },
-                    h("div", { class: "rs-name rs-ellipsis" }, f.name),
-                    h("div", { class: "rs-muted rs-small" }, `${f.files.length} workflow${f.files.length === 1 ? "" : "s"}${owner ? ` · owner ${owner}` : ""}${f.role === "view" ? " · view only" : ""}`)),
-                f.manage ? h("button", { class: `rs-btn rs-btn-sm ${this.folderAccess === f.path ? "active" : ""}`, onclick: () => {
-                    this.folderAccess = this.folderAccess === f.path ? null : f.path;
-                    this.folderDraft = null;
-                    this.loadFiles();
-                } }, "Access") : null,
-                f.manage ? h("button", { class: "rs-btn rs-btn-icon", title: "Rename folder", onclick: async () => {
-                    const name = await this.prompt("Rename folder", `New name for "${f.name}"`, f.name);
-                    if (!name || name === f.name) return;
-                    await this.run(() => this.client.request("PATCH", "/rigshare/api/workspace/folders", { path: f.path, name }), "Folder renamed");
-                    this.loadFiles();
-                } }, h("i", { class: "pi pi-pencil" })) : null,
-                f.manage ? h("button", { class: "rs-btn rs-btn-icon rs-danger", title: "Delete folder (must be empty)", onclick: async () => {
-                    if (!(await this.confirm("Delete folder", `Delete the empty folder "${f.name}"?`))) return;
-                    await this.run(() => this.client.request("DELETE", `/rigshare/api/workspace/folders?path=${encodeURIComponent(f.path)}`), "Folder deleted");
-                    this.loadFiles();
-                } }, h("i", { class: "pi pi-trash" })) : null);
-            const parts = [head];
-            if (this.folderAccess === f.path) {
-                parts.push(this.accessEditorFor({
-                    load: async () => {
-                        const t = await this.client.request("GET", "/rigshare/api/workspace");
-                        const folder = t.shared.find((x) => x.path === f.path);
-                        const members = await this.client.request("GET", `/rigshare/api/workspace/folder?path=${encodeURIComponent(f.path)}`);
-                        return { owner: folder?.owner, restricted: !!folder?.restricted, members: members.members || {} };
-                    },
-                    save: (restricted, members) => this.client.request("PATCH", "/rigshare/api/workspace/folders", { path: f.path, restricted, members }),
-                    everyoneHint: "Anyone with an account can open its workflows, with their usual permissions",
-                    close: () => { this.folderAccess = null; this.loadFiles(); },
-                    draftKey: "folderDraft",
-                }));
-            }
-            if (open) {
-                parts.push(h("div", { class: "rs-folder-files" },
-                    ...(f.files.length ? f.files.map((file) => fileRow(file, f.path, f.manage)) : [empty("Empty folder.")])));
-            }
-            return h("div", { class: "rs-folder-block" }, ...parts);
-        });
-        const newFolderBtn = tree.can_create ? h("button", { class: "rs-btn", onclick: async () => {
-            const name = await this.prompt("New shared folder", "Folder name");
-            if (!name) return;
-            await this.run(() => this.client.request("POST", "/rigshare/api/workspace/folders", { name }), "Folder created");
-            this.loadFiles();
-        } }, h("i", { class: "pi pi-folder-plus" }), "New shared folder") : null;
-        sections.push(this.section("pi-folder", "Shared folders",
-            ...(folderBlocks.length ? folderBlocks : [empty("No shared folders yet.")]),
-            newFolderBtn ? h("div", { class: "rs-actions" }, newFolderBtn) : null));
-
-        sections.push(this.section("pi-globe", "Common",
-            h("p", { class: "rs-muted rs-small" }, "Top-level workflows, visible to everyone."),
-            ...(tree.common.files.length ? tree.common.files.map((f) => fileRow(f, "", this.client.perms.admin)) : [empty("No workflows at the top level.")])));
-        this.filesEl.replaceChildren(...sections);
     }
 
     // ----- people ---------------------------------------------------------

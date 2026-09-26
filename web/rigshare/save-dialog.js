@@ -1,10 +1,11 @@
-// "Save" asks where: My files, a shared folder, or Common.
+// "Save" asks where, with the same folder browser as the Files tab.
 //
 // ComfyUI's save flow asks the workflow for a file name (promptSave) and saves
 // to "<workflow directory>/<name>.json". Returning "<folder>/<name>" makes it
 // save straight into the chosen folder, with ComfyUI's own overwrite checks.
 
 import { h, storage } from "./ui.js";
+import { FilesBrowser, modal } from "./files.js";
 
 const LAST_FOLDER = "rigshare.lastSaveFolder";
 
@@ -12,7 +13,7 @@ function cleanName(name) {
     return (name || "").trim().replace(/\.json$/i, "").replace(/[\\/]+/g, "-").slice(0, 120);
 }
 
-export function installSaveDialog(app, api, client) {
+export function installSaveDialog(app, api, client, sync) {
     const patch = () => {
         const wf = app.extensionManager?.workflow?.activeWorkflow;
         if (!wf) return false;
@@ -24,7 +25,7 @@ export function installSaveDialog(app, api, client) {
         proto.promptSave = async function (...args) {
             if (!client.online || !client.self || !this.path?.startsWith("workflows/")) return original.apply(this, args);
             try {
-                return await chooseLocation(app, api, client, this);
+                return await chooseLocation(app, api, client, sync, this);
             } catch (e) {
                 console.error("[RigShare] save dialog", e);
                 return original.apply(this, args);
@@ -36,95 +37,38 @@ export function installSaveDialog(app, api, client) {
     const timer = setInterval(() => { if (patch()) clearInterval(timer); }, 1000);
 }
 
-export async function chooseLocation(app, api, client, wf) {
-    let tree = await client.request("GET", "/rigshare/api/workspace");
+export async function chooseLocation(app, api, client, sync, wf) {
     const directory = wf.directory || "workflows";
-
-    const options = () => {
-        const out = [];
-        if (tree.private) out.push({ folder: tree.private.path, label: "My files", hint: "Only you", icon: "pi-user" });
-        for (const f of tree.shared) {
-            if (f.role === "edit") out.push({ folder: f.path, label: f.name, hint: f.restricted ? "Shared with chosen people" : "Shared with everyone", icon: f.restricted ? "pi-lock" : "pi-folder" });
-        }
-        if (tree.common?.role === "edit") out.push({ folder: "", label: "Common", hint: "Top level, visible to everyone", icon: "pi-globe" });
-        return out;
-    };
-
     const current = directory === "workflows" ? null : directory.slice("workflows/".length);
-    const pick = (opts) => {
-        const remembered = storage.get(LAST_FOLDER);
-        return opts.find((o) => o.folder === current)?.folder
-            ?? opts.find((o) => o.folder === remembered)?.folder
-            ?? opts[0]?.folder;
-    };
+    const start = current ?? storage.get(LAST_FOLDER) ?? `users/${client.self?.key}`;
 
-    const result = await new Promise((resolve) => {
-        let opts = options();
-        let selected = pick(opts);
-        const name = h("input", { class: "rs-input", value: cleanName(wf.filename) || "Untitled", maxLength: 120 });
-        const list = h("div", { class: "rs-save-list" });
-        const newFolder = h("input", { class: "rs-input", placeholder: "New shared folder name", maxLength: 64 });
-        const error = h("div", { class: "rs-error" });
-
-        const renderList = () => {
-            list.replaceChildren(...opts.map((o) => h("label", { class: `rs-save-option ${o.folder === selected ? "on" : ""}` },
-                h("input", { type: "radio", name: "rs-save-folder", checked: o.folder === selected, onchange: () => { selected = o.folder; renderList(); } }),
-                h("i", { class: `pi ${o.icon}` }),
-                h("span", { class: "rs-grow rs-min0" },
-                    h("div", { class: "rs-name rs-ellipsis" }, o.label),
-                    h("div", { class: "rs-muted rs-small" }, o.hint)))));
-        };
-
-        const close = (value) => {
-            backdrop.remove();
-            document.removeEventListener("keydown", onKey, true);
-            resolve(value);
-        };
-        const submit = () => {
-            const n = cleanName(name.value);
-            if (!n) { error.textContent = "Enter a name"; return; }
-            if (selected === undefined) { error.textContent = "Choose where to save it"; return; }
-            storage.set(LAST_FOLDER, selected);
-            close({ name: n, folder: selected });
-        };
-        const onKey = (e) => {
-            if (!backdrop.isConnected) return;
-            if (e.key === "Escape") { e.stopPropagation(); close(null); }
-            if (e.key === "Enter" && document.activeElement !== newFolder) { e.preventDefault(); e.stopPropagation(); submit(); }
-        };
-
-        const canCreate = tree.can_create;
-        const createRow = canCreate ? h("div", { class: "rs-row" }, newFolder,
-            h("button", {
-                class: "rs-btn", onclick: async () => {
-                    error.textContent = "";
-                    try {
-                        const res = await client.request("POST", "/rigshare/api/workspace/folders", { name: newFolder.value });
-                        tree = await client.request("GET", "/rigshare/api/workspace");
-                        opts = options();
-                        selected = res.path;
-                        newFolder.value = "";
-                        renderList();
-                    } catch (e) { error.textContent = e.message; }
-                },
-            }, h("i", { class: "pi pi-folder-plus" }), "Create")) : null;
-
-        const backdrop = h("div", { class: "rs-modal-backdrop rs-panel-vars", onmousedown: (e) => { if (e.target === backdrop) close(null); } },
-            h("div", { class: "rs-modal", role: "dialog", "aria-label": "Save workflow" },
-                h("div", { class: "rs-modal-title" }, h("i", { class: "pi pi-save" }), "Save workflow"),
-                h("label", { class: "rs-label" }, "Name"), name,
-                h("label", { class: "rs-label" }, "Save in"), list,
-                createRow, error,
-                h("div", { class: "rs-actions rs-modal-actions" },
-                    h("button", { class: "rs-btn rs-btn-ghost", onclick: () => close(null) }, "Cancel"),
-                    h("button", { class: "rs-btn rs-btn-primary", onclick: submit }, "Save"))));
-        backdrop.addEventListener("keydown", (e) => e.stopPropagation());
-        renderList();
-        document.body.append(backdrop);
-        document.addEventListener("keydown", onKey, true);
-        setTimeout(() => { name.focus(); name.select(); }, 30);
+    const name = h("input", { class: "rs-input rs-save-name", value: cleanName(wf.filename) || "Untitled", maxLength: 120,
+        onkeydown: (e) => { e.stopPropagation(); if (e.key === "Enter") { e.preventDefault(); submit(); } } });
+    const where = h("span", { class: "rs-muted rs-small rs-grow rs-ellipsis" });
+    const save = h("button", { class: "rs-btn rs-btn-primary" }, h("i", { class: "pi pi-save" }), "Save here");
+    const browser = new FilesBrowser({
+        app, client, sync, mode: "save", start: start === "" ? "@shared" : start,
+        onPickFile: (entry) => { name.value = entry.name; name.focus(); },
+        onChange: () => {
+            save.disabled = browser.saveFolder === null;
+            where.textContent = browser.saveFolder === null
+                ? (browser.path === "@home" ? "Choose My files or Shared" : "You cannot save in this folder")
+                : `Save in ${browser.label}`;
+        },
     });
+    const body = h("div", { class: "rs-save-body" }, h("label", { class: "rs-label" }, "Name"), name, h("label", { class: "rs-label" }, "Location"), browser.el);
+    const m = modal("Save workflow", "pi-save", body, [where, h("button", { class: "rs-btn rs-btn-ghost", onclick: () => m.close(null) }, "Cancel"), save]);
+    function submit() {
+        const n = cleanName(name.value);
+        if (!n || browser.saveFolder === null) return;
+        storage.set(LAST_FOLDER, browser.saveFolder);
+        m.close({ name: n, folder: browser.saveFolder });
+    }
+    save.onclick = submit;
+    await browser.reload();
+    setTimeout(() => { name.focus(); name.select(); }, 30);
 
+    const result = await m.closed;
     if (!result) return null;
     const targetDir = result.folder ? `workflows/${result.folder}` : "workflows";
     if (targetDir === directory) return result.name;

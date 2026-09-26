@@ -175,6 +175,41 @@ body.rs-no-manager [aria-label="ComfyUI Manager"] { display: none !important; }
 .rs-folder-files { margin-left: 26px; }
 .rs-file .rs-select { max-width: 110px; }
 
+/* file browser */
+.rs-files-logo { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; font-size: 15px;
+  background: linear-gradient(135deg, #3b82f6, #a855f7); color: #fff; flex: none; }
+.rs-fb { display: flex; flex-direction: column; min-height: 0; }
+.rs-fb-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
+.rs-fb-crumbs { flex: 1; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
+.rs-fb-crumb { border: 0; background: none; color: var(--rs-muted); font: inherit; font-size: 12.5px; padding: 3px 5px; border-radius: 5px; cursor: pointer; }
+.rs-fb-crumb:hover { color: var(--rs-fg); background: var(--rs-bg2); }
+.rs-fb-crumb.current { color: var(--rs-fg); font-weight: 650; }
+.rs-fb-sep { font-size: 10px; color: var(--rs-muted); }
+.rs-fb-actions { display: flex; gap: 4px; }
+.rs-fb-tools { margin-bottom: 6px; }
+.rs-fb-search { padding: 5px 8px; font-size: 12px; }
+.rs-fb-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 60px; }
+.rs-fb-row { display: flex; align-items: center; gap: 6px; border-radius: 7px; position: relative; }
+.rs-fb-row:hover { background: color-mix(in srgb, var(--rs-bg2) 70%, transparent); }
+.rs-fb-row.disabled { opacity: .45; }
+.rs-fb-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 7px 8px; border: 0; background: none;
+  color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.rs-fb-main:disabled { cursor: default; }
+.rs-fb-icon { font-size: 16px; color: var(--rs-muted); width: 18px; text-align: center; flex: none; }
+.rs-fb-icon.folder { color: #f5b942; }
+.rs-fb-home { width: 100%; padding: 12px 10px; border: 1px solid var(--rs-border); background: color-mix(in srgb, var(--rs-bg2) 45%, transparent);
+  color: inherit; font: inherit; text-align: left; cursor: pointer; margin-bottom: 6px; }
+.rs-fb-home:hover { border-color: var(--rs-accent); }
+.rs-fb-home .rs-fb-icon { font-size: 20px; color: var(--rs-accent); width: 24px; }
+.rs-fb-tools-row { display: none; gap: 3px; padding-right: 6px; }
+.rs-fb-row:hover .rs-fb-tools-row, .rs-fb-row:focus-within .rs-fb-tools-row { display: flex; }
+.rs-fb-empty { color: var(--rs-muted); font-size: 12px; text-align: center; padding: 24px 8px; }
+.rs-modal-wide { max-width: 560px; }
+.rs-modal-wide .rs-fb-list { max-height: 46vh; }
+.rs-modal-footer { display: flex; align-items: center; gap: 8px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--rs-border); }
+.rs-save-body { display: flex; flex-direction: column; gap: 6px; }
+.rs-save-body .rs-fb { border: 1px solid var(--rs-border); border-radius: 8px; padding: 8px; }
+
 /* save dialog */
 .rs-modal-backdrop { position: fixed; inset: 0; z-index: 3000; background: rgb(0 0 0 / .55); display: grid; place-items: center; padding: 16px; color: var(--rs-fg); font-size: 13px; }
 .rs-modal { width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; background: var(--rs-bg); border: 1px solid var(--rs-border);
