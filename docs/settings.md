@@ -6,14 +6,12 @@ In ComfyUI's settings dialog, under **RigShare**. They apply to your browser onl
 
 | Setting | Default |
 |---|---|
-| Share saved workflows automatically | on |
-| Share unsaved tabs automatically once edited | on |
 | Show other people's cursors and selections | on |
 | Show names next to cursors | on |
 | Play a sound for new chat messages | on |
 | Show a notification for new chat messages | off |
 
-Commands, bindable under *Keybindings*: **RigShare: Open chat** and **RigShare: Share this tab**.
+Commands, bindable under *Keybindings*: **RigShare: Open chat** and **Open from RigShare…** (Ctrl+Alt+O).
 
 The **Server** tab's *Pop out* button toggles the floating monitor. Drag it by its title; its position is remembered.
 
@@ -32,7 +30,7 @@ Admins change these under **Admin → Server settings**. They are stored in `rig
 | `hide_api_templates` | `false` | Remove templates that need paid API nodes from the template browser |
 | `api_protection.enabled` | `true` | Server-side checks on queue, interrupt, free and upload calls |
 | `api_protection.trusted_ips` | `["127.0.0.1", "::1"]` | Addresses or networks that skip login and checks |
-| `room_expiry_days` | `14` | Forget shared workflows nobody opened for this long |
+| `room_expiry_days` | `14` | Forget the live state of workflows nobody opened for this long |
 | `snapshot_interval_sec` | `300` | Automatic snapshot interval while editing; `0` turns it off |
 | `snapshot_keep` | `30` | Automatic snapshots kept per workflow; named ones are always kept |
 | `chat_history` | `200` | Chat messages kept |

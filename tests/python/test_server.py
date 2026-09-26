@@ -197,3 +197,49 @@ def test_folders_over_comfy_api(run):
             await h.patch(rig.url("/rigshare/api/users/alice"), json={"username": "alicia"}, headers=H["boss"])
             assert os.path.exists(os.path.join(rig.user_root, "workflows", "users", "alicia", "keep.json"))
     run(scenario())
+
+
+def test_live_follows_folders(run):
+    async def scenario():
+        async with rig_server() as rig:
+            await rig.setup_admin()
+            for name in ("alice", "bob"):
+                await rig.add_user(name, edit=True)
+            alice, bob = await rig.ws("alice"), await rig.ws("bob")
+
+            # Your own private folder and unsaved tabs never become live.
+            for key in ("file:workflows/users/alice/mine.json", "tmp:abc"):
+                await alice.send({"type": "join", "room": key, "name": "x", "doc": BASE_DOC})
+                assert (await alice.until("room_denied"))["room"] == key
+            assert not rig.hub.rooms
+
+            # Anything else is live while open, and only open ones are listed.
+            key = "file:workflows/shared/team.json"
+            await alice.send({"type": "join", "room": key, "name": "team", "doc": BASE_DOC})
+            await alice.until("room")
+            presence = [m for m in await bob.drain() if m["type"] == "presence"][-1]
+            assert [r["key"] for r in presence["rooms"]] == [key]
+            await alice.send({"type": "join", "room": None})
+            presence = [m for m in await bob.drain() if m["type"] == "presence"][-1]
+            assert presence["rooms"] == [], "closed workflows leave the live list"
+            assert key in rig.hub.rooms, "its state is kept for the next person who opens it"
+
+            # Moving it into a private folder takes it out of live sharing.
+            path = "workflows/shared/team.json"
+            await rig.http.post(rig.url(f"/api/userdata/{enc(path)}"), data=b"{}", headers=rig.headers["alice"])
+            await bob.send({"type": "join", "room": key, "name": "team"})
+            await bob.until("room")
+            r = await rig.http.post(rig.url(f"/api/userdata/{enc(path)}/move/{enc('workflows/users/alice/team.json')}"), headers=rig.headers["boss"])
+            assert r.status == 200
+            assert not rig.hub.rooms
+
+            # Deleting a live file closes it for whoever has it open.
+            key2, path2 = "file:workflows/gone.json", "workflows/gone.json"
+            await rig.http.post(rig.url(f"/api/userdata/{enc(path2)}"), data=b"{}", headers=rig.headers["alice"])
+            await bob.send({"type": "join", "room": key2, "name": "gone", "doc": BASE_DOC})
+            await bob.until("room")
+            assert (await rig.http.delete(rig.url(f"/api/userdata/{enc(path2)}"), headers=rig.headers["boss"])).status == 204
+            assert (await bob.until("room_closed"))["room"] == key2
+            assert key2 not in rig.hub.rooms
+            await alice.close(); await bob.close()
+    run(scenario())

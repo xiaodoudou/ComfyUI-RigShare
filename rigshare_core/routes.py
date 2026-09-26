@@ -408,8 +408,12 @@ def setup(server, store, hub):
     @routes.post("/rigshare/api/workspace/delete-folder")
     async def ws_delete_dir(request):
         body = await request.json()
-        err, _ = ws_call(lambda: ws().delete_dir(body.get("path", ""), *who(request)))
-        return err or web.json_response({"ok": True})
+        path = norm(body.get("path", ""))
+        err, _ = ws_call(lambda: ws().delete_dir(path, *who(request)))
+        if err:
+            return err
+        await hub.drop_rooms("file:workflows/" + path, display(request))
+        return web.json_response({"ok": True})
 
     @routes.get("/rigshare/api/workspace/folder")
     async def folder_acl(request):
@@ -518,20 +522,6 @@ def setup(server, store, hub):
         log.info(f"[RigShare] {display(request)} set access for {room.name}: "
                  f"{'everyone' if acl is None else ', '.join(f'{u}={r}' for u, r in acl['members'].items()) or 'owner only'}")
         return web.json_response({"ok": True, "owner": room.owner, "restricted": bool(acl)})
-
-    @routes.delete("/rigshare/api/room")
-    async def delete_room(request):
-        require_admin(request)
-        key = request.query.get("key", "")
-        room = hub.rooms.get(key)
-        if not room:
-            return error("No such room", 404)
-        if hub.members(key):
-            names = ", ".join(c.name for c in hub.members(key))
-            return error(f"Still open by {names}", 409)
-        hub.remove_room(key, display(request))
-        await hub.broadcast_presence()
-        return web.json_response({"ok": True})
 
     @routes.get("/rigshare/api/room")
     async def get_room(request):
@@ -748,6 +738,9 @@ def setup(server, store, hub):
         # A file moved on disk: its live room follows it.
         if userdata and userdata[0] == "move" and getattr(response, "status", 0) == 200:
             hub.rekey_rooms("file:" + userdata[1], "file:" + userdata[2])
+            await hub.broadcast_presence()
+        if userdata and userdata[0] == "delete" and getattr(response, "status", 0) in (200, 204):
+            await hub.drop_rooms("file:" + userdata[1], display(request))
         # Hide API templates: rewrite the template index ComfyUI serves.
         if (store.config.get("hide_api_templates") and request.method == "GET"
                 and path.startswith("/templates/index") and path.endswith(".json")):

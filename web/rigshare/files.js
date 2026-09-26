@@ -31,6 +31,8 @@ export class FilesBrowser {
             h("div", { class: "rs-fb-bar" }, this.crumbs, this.actions),
             h("div", { class: "rs-fb-tools" }, this.search),
             this.list);
+        // The sidebar browser lives as long as the page: keep its live dots current.
+        if (mode === "browse") client.on("presence", () => { if (this.listing && this.el.isConnected) this.renderList(); });
     }
 
     get me() {
@@ -163,6 +165,8 @@ export class FilesBrowser {
             ? [e.owner !== undefined && owner ? `owner ${owner}` : null, e.role === "view" ? "view only" : null].filter(Boolean).join(" · ")
             : [timeAgo(e.modified * 1000), e.role === "view" ? "view only" : null].filter(Boolean).join(" · ");
         const icon = isFolder ? (e.restricted ? "pi-lock" : "pi-folder") : "pi-file";
+        // Files outside private folders are live while open: show who is in them.
+        const live = isFolder ? null : this.client.rooms?.find((r) => r.key === `file:workflows/${e.path}`);
         const disabled = this.mode === "pick" && !isFolder;
         const tools = this.mode === "browse" ? this.rowTools(e) : [];
         return h("div", { class: `rs-fb-row ${isFolder ? "folder" : "file"} ${disabled ? "disabled" : ""}` },
@@ -177,7 +181,8 @@ export class FilesBrowser {
             },
             h("i", { class: `pi ${icon} rs-fb-icon ${isFolder ? "folder" : ""}` }),
             h("span", { class: "rs-grow rs-min0" },
-                h("div", { class: "rs-name rs-ellipsis", title: e.name }, e.name),
+                h("div", { class: "rs-name rs-ellipsis", title: e.name }, e.name,
+                    live ? h("span", { class: "rs-live rs-inline-icon", title: `Live · ${live.members.length} open` }, h("span", { class: "rs-live-dot" })) : null),
                 meta ? h("div", { class: "rs-muted rs-small rs-ellipsis" }, meta) : null)),
             tools.length ? h("div", { class: "rs-fb-tools-row" }, ...tools) : null);
     }

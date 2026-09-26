@@ -155,22 +155,6 @@ app.registerExtension({
 
     settings: [
         {
-            id: "RigShare.ShareSaved",
-            category: ["RigShare", "Sharing", "ShareSaved"],
-            name: "Share saved workflows automatically (everyone opening the same file edits it together)",
-            type: "boolean",
-            defaultValue: false,
-            onChange: (v) => { if (rig) rig.sync.autoShareFiles = v; },
-        },
-        {
-            id: "RigShare.ShareUnsaved",
-            category: ["RigShare", "Sharing", "ShareUnsaved"],
-            name: "Share unsaved tabs automatically once they contain nodes",
-            type: "boolean",
-            defaultValue: false,
-            onChange: (v) => { if (rig) rig.sync.autoShareUnsaved = v; },
-        },
-        {
             id: "RigShare.ShowCursors",
             category: ["RigShare", "Presence", "ShowCursors"],
             name: "Show other people's cursors and selections",
@@ -228,12 +212,6 @@ app.registerExtension({
                 rig?.panel.focusChat();
             },
         },
-        {
-            id: "RigShare.ShareTab",
-            label: "RigShare: Share this tab",
-            icon: "pi pi-share-alt",
-            function: () => rig?.sync.shareCurrent(),
-        },
     ],
 
     async setup() {
@@ -248,8 +226,6 @@ app.registerExtension({
         rig = { client, sync, presence, panel };
         window.rigshare = rig; // handy for debugging from the console
 
-        sync.autoShareFiles = setting("RigShare.ShareSaved", false);
-        sync.autoShareUnsaved = setting("RigShare.ShareUnsaved", false);
         presence.showCursors = setting("RigShare.ShowCursors", true);
         presence.showNames = setting("RigShare.ShowCursorNames", true);
         panel.chatToasts = setting("RigShare.ChatToasts", false);

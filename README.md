@@ -90,7 +90,7 @@ Behind a reverse proxy, turn on WebSocket support, or nothing will be live. See 
 | | |
 |---|---|
 | [Installing](docs/install.md) | Custom node, Docker/compose, first-run setup, upgrading from Nexus |
-| [Sharing workflows](docs/sharing.md) | Rooms, saved vs unsaved tabs, stop sharing, snapshots, follow |
+| [Sharing workflows](docs/sharing.md) | Live workflows by folder, access lists, snapshots, follow |
 | [Accounts and permissions](docs/accounts.md) | Edit, Queue, Admin, renaming, what viewers can do |
 | [API access](docs/api.md) | API keys, websockets, trusted IPs, other apps such as Open WebUI |
 | [Settings](docs/settings.md) | Panel settings, ComfyUI settings, every key in `config.json` |

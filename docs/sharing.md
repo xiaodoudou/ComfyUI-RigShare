@@ -1,22 +1,23 @@
 # Sharing workflows
 
-Every shared workflow is a *room* on the server. The server keeps the current version of each room and relays edits between everyone who has it open.
+Sharing follows folders, like a shared drive. There is nothing to share by hand: where a workflow is saved decides who works on it with you.
 
-## Which tabs are shared
+## Which tabs are live
 
-| Tab | Shared? |
+| Tab | Live? |
 |---|---|
-| A saved workflow file | Yes, automatically. Everyone who opens the same file lands in the same room. |
-| An unsaved tab | As soon as you edit it, or when you click **Share this tab**. Untouched tabs, such as the default workflow or tabs restored from your last visit, stay private. |
+| A workflow saved in **Shared** or at the top level of the workflows folder | Yes, while it is open. Everyone who opens the same file lands in the same room and edits it together. |
+| A workflow in **My files** (your private folder) | No. Only you (and admins) can open it. |
+| An unsaved tab | No. Save it outside your private folder to work on it with others. |
 | A snapshot opened as a copy | No, it is a private copy. |
 
-Both automatic behaviours can be turned off in ComfyUI's settings under *RigShare*.
+To take a private workflow live, move it out of *My files*: **Move to Shared…** in the panel, **Move to…** in the Files tab, or save it somewhere shared.
 
-Only the tab on screen is live. Switch to another tab and you leave the room; switch back and you rejoin. If the room changed meanwhile, you get the current version.
+Only the tab on screen is live. Switch to another tab and you leave the room; switch back and you rejoin. If the workflow changed meanwhile, you get the current version.
 
 ## The panel
 
-**Workflows** shows the tab on screen: whether it is live, who else is in it, and buttons for **Snapshot**, **History** and **Stop sharing**. Below that is the list of shared workflows, with the people in each one. Open any of them with the arrow.
+**Live** shows the tab on screen: whether it is live, who else is in it, and buttons for **Snapshot** and **History**. For a private or unsaved tab it says why it is not live. Below that is the list of **live workflows**: those someone has open right now, with their folder and the people in each one. Open any of them with the arrow. The Files tab marks live files with a green dot.
 
 **People** lists who is online and which workflow they are on. The eye button *follows* someone: it jumps to their tab and keeps your view on theirs until you click or scroll the canvas.
 
@@ -30,20 +31,15 @@ Only the tab on screen is live. Switch to another tab and you leave the room; sw
 
 Viewers (no *Edit* permission) see a read-only canvas. Anything they change locally is put back.
 
-## Stop sharing
+## When a workflow stops being live
 
-**Stop sharing** takes the tab out of its room and keeps working on a private copy.
-
-- For an **admin**, if nobody else is in the room, it is also removed from the shared list, and a *Before unshare* snapshot is kept in its history.
-- Otherwise, including for everyone who is not an admin, you just leave. It stays shared for the others.
-
-Only admins can remove a shared workflow. Workflows nobody has open show a 🗑 button for them in the list. For a saved file, stopping sharing only applies to you. Anyone else who opens the file shares it again, unless they turned off automatic sharing.
-
-Rooms nobody opens for 14 days are forgotten (`room_expiry_days`).
+- When everyone closes it, it leaves the live list. The server keeps its latest state, so the next person to open it picks up where the others left off, saved or not. That state is forgotten after 14 days without anyone opening it (`room_expiry_days`).
+- Moving it into a private folder takes it out of live sharing straight away.
+- Deleting it (admins, or the owner of its shared folder) closes it for the people who have it open. Their tabs stay as private copies, and a *Before delete* snapshot is kept.
 
 ## Who can open it
 
-By default everyone with an account can open a shared workflow, with their usual permissions. The **Access** button under *This tab* lets its owner, whoever shared it first, or any admin choose *Only people I choose* and give each person **Can view** or **Can edit**.
+By default everyone who can open its folder can open a live workflow, with their usual permissions. The **Access** button under *This tab* lets its owner (whoever opened it first) or any admin choose *Only people I choose* and give each person **Can view** or **Can edit**.
 
 - The owner and admins always have access.
 - A role can only narrow someone's account permissions: *Can edit* does nothing for an account without *Edit*.

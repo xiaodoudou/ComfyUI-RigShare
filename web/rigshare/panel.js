@@ -3,6 +3,8 @@
 
 import { h, initials, timeAgo, clock, roleChips, meter, storage } from "./ui.js";
 import { ServerWidget } from "./server-widget.js";
+import { pickFolder } from "./files.js";
+import { isPrivatePath } from "./sync.js";
 
 const ICON_URL = new URL("./assets/icon.svg", import.meta.url).href;
 
@@ -212,16 +214,23 @@ export class RigSharePanel {
         const wf = s.store?.activeWorkflow;
         if (!wf) return this.section("pi-file", "This tab", h("p", { class: "rs-muted" }, "No tab open."));
         const room = s.target;
+        const privacy = s.privacyOf(wf);
         const head = h("div", { class: "rs-tab-head" },
             h("div", { class: "rs-name" }, s.tabName(wf)),
-            wf.isTemporary ? h("span", { class: "rs-chip" }, "unsaved") : null);
+            privacy ? h("span", { class: "rs-chip" }, privacy) : null);
         const row = h("div", { class: "rs-actions" });
         const body = [head];
         if (!room) {
-            body.push(h("p", { class: "rs-muted" }, wf.isTemporary
-                ? "Private until you edit it or share it."
-                : "Private — not synced with others."));
-            row.append(h("button", { class: "rs-btn rs-btn-primary", onclick: () => s.shareCurrent() }, h("i", { class: "pi pi-share-alt" }), "Share this tab"));
+            body.push(h("p", { class: "rs-muted" }, privacy === "unsaved"
+                ? "Not live. Save it outside your private folder to work on it with others."
+                : privacy === "private"
+                    ? "In your private folder: only you see it. Move it out to work on it with others."
+                    : "Not live: this tab is a private copy (no access, or the file was deleted)."));
+            if (privacy === "private" && c.perms.edit) {
+                row.append(h("button", {
+                    class: "rs-btn rs-btn-primary", onclick: () => this.moveOutOfPrivate(wf),
+                }, h("i", { class: "pi pi-share-alt" }), "Move to Shared…"));
+            }
         } else {
             const here = c.users.filter((u) => u.room === room.key);
             const last = s.lastEditor && Date.now() - s.lastEditor.at < 60000 ? ` · ${s.lastEditor.name} editing` : "";
@@ -245,12 +254,19 @@ export class RigSharePanel {
             }
             row.append(
                 h("button", { class: `rs-btn ${this.historyOpen ? "active" : ""}`, onclick: () => { this.historyOpen = !this.historyOpen; this.renderBody(); if (this.historyOpen) this.loadHistory(); } },
-                    h("i", { class: "pi pi-history" }), "History"),
-                h("button", { class: "rs-btn rs-btn-ghost", title: c.perms.admin ? "Stop sharing this tab (removed from the list if nobody else is in it)" : "Leave: stop syncing this tab and keep a private copy", onclick: () => s.unshareCurrent() },
-                    h("i", { class: "pi pi-eye-slash" }), "Stop sharing"));
+                    h("i", { class: "pi pi-history" }), "History"));
         }
         this.historyEl ??= h("div", { class: "rs-history" });
         return this.section("pi-file", "This tab", ...body, row, room && this.historyOpen ? this.historyEl : null);
+    }
+
+    /** Move a private workflow into a shared location, where it goes live. */
+    async moveOutOfPrivate(wf) {
+        const dest = await pickFolder({ app: this.app, client: this.client, sync: this.sync, title: `Move "${this.sync.tabName(wf)}" to…`, start: "@shared" });
+        if (dest === null || dest === undefined) return;
+        if (isPrivatePath(`workflows/${dest}/`)) return this.client.emit("toast", { severity: "warn", summary: "RigShare", detail: "Pick a folder outside a private folder." });
+        const base = wf.path.split("/").pop();
+        await this.run(() => this.sync.movePath(wf.path, dest ? `workflows/${dest}/${base}` : `workflows/${base}`), "Moved: it is live now");
     }
 
     accessLine() {
@@ -366,27 +382,20 @@ export class RigSharePanel {
         const rows = rooms.map((r) => {
             const here = r.key === this.sync.targetKey;
             const members = r.members.map((id) => byId.get(id)).filter(Boolean);
+            const folder = r.key.replace(/^file:workflows\//, "").split("/").slice(0, -1).join("/");
             return h("div", { class: `rs-row-item rs-room ${here ? "here" : ""}`, title: r.key.replace(/^file:workflows\//, "") },
-                h("i", { class: `pi ${r.kind === "file" ? "pi-file" : "pi-file-edit"} rs-row-icon` }),
+                h("i", { class: "pi pi-file rs-row-icon" }),
                 h("div", { class: "rs-grow rs-min0" },
                     h("div", { class: "rs-name rs-ellipsis" }, r.name, r.restricted ? h("i", { class: "pi pi-lock rs-inline-icon rs-muted", title: "Restricted" }) : null),
-                    members.length
-                        ? h("div", { class: "rs-avatars" }, ...members.map((u) => h("span", { class: "rs-avatar rs-avatar-xs", style: `background:${u.color}`, title: u.name }, initials(u.name))))
-                        : h("div", { class: "rs-muted rs-small" }, `${timeAgo(r.updated * 1000)} · ${r.nodes} nodes`)),
-                !here && !members.length && c.perms.admin ? h("button", {
-                    class: "rs-btn rs-btn-icon rs-danger", title: "Stop sharing (remove from this list)",
-                    onclick: async () => {
-                        if (!(await this.confirm("Stop sharing", `Remove "${r.name}" from the shared workflows? A snapshot is kept in its history.`))) return;
-                        await this.run(() => c.request("DELETE", `/rigshare/api/room?key=${encodeURIComponent(r.key)}`), `"${r.name}" is no longer shared`);
-                    },
-                }, h("i", { class: "pi pi-trash" })) : null,
+                    h("div", { class: "rs-muted rs-small rs-ellipsis" }, folder ? folder.replace(/^shared(\/|$)/, "Shared$1") : "Workflows", ` · ${r.nodes} nodes`),
+                    h("div", { class: "rs-avatars" }, ...members.map((u) => h("span", { class: "rs-avatar rs-avatar-xs", style: `background:${u.color}`, title: u.name }, initials(u.name))))),
                 here ? h("span", { class: "rs-chip rs-chip-edit" }, "open") : h("button", {
                     class: "rs-btn rs-btn-icon", title: "Open",
                     onclick: () => this.run(() => this.sync.openRoom(r)),
                 }, h("i", { class: "pi pi-arrow-right" })));
         });
-        return this.section("pi-share-alt", "Shared workflows",
-            ...(rows.length ? rows : [h("p", { class: "rs-muted" }, "Nothing shared yet. Open a saved workflow or edit a tab.")]));
+        return this.section("pi-share-alt", "Live workflows",
+            ...(rows.length ? rows : [h("p", { class: "rs-muted" }, "Nobody has a shared workflow open. Any workflow outside a private folder is live while it is open.")]));
     }
 
     // ----- people ---------------------------------------------------------

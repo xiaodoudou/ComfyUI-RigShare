@@ -7,7 +7,7 @@ globalThis.window ??= new EventTarget();
 const nativeSetInterval = globalThis.setInterval;
 globalThis.setInterval = (...args) => { const t = nativeSetInterval(...args); t.unref?.(); return t; };
 globalThis.performance ??= { now: () => Date.now() };
-const { RoomSync, snapshotOf, diffSnapshots } = await import("../../web/rigshare/sync.js");
+const { RoomSync, snapshotOf, diffSnapshots, isPrivatePath } = await import("../../web/rigshare/sync.js");
 const { applyPatch, reconcile } = await import("../../web/rigshare/graphdoc.js");
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -63,7 +63,6 @@ test("opening a file never overwrites the shared workflow of the previous tab", 
     };
     const api = new EventTarget();
     const sync = new RoomSync(app, api, client);
-    sync.overrides[tabA.path] = true;
     sync.tick();
     client.emit("room", { room: `file:${tabA.path}`, version: 1, doc: graphA, role: "edit", manage: true });
     await sleep(400);
@@ -76,4 +75,19 @@ test("opening a file never overwrites the shared workflow of the previous tab", 
 
     const leaked = sent.filter((m) => m.type === "graph" && m.room === `file:${tabA.path}`);
     assert.equal(leaked.length, 0, "the previous tab's room must not receive the new graph");
+});
+
+test("live follows folders: saved files outside private folders only", () => {
+    const store = { activeWorkflow: null, openWorkflows: [] };
+    const client = Object.assign(new EventTarget(), { online: false, perms: {}, rooms: [], users: [], on() {}, send() { return true; } });
+    const app = { extensionManager: { workflow: store }, loadGraphData: async () => {} };
+    const sync = new RoomSync(app, new EventTarget(), client);
+    const tab = (path, isTemporary = false) => ({ path, filename: path.split("/").pop(), isTemporary });
+    assert.equal(sync.roomFor(tab("workflows/flow.json"))?.key, "file:workflows/flow.json");
+    assert.equal(sync.roomFor(tab("workflows/shared/Team/a.json"))?.key, "file:workflows/shared/Team/a.json");
+    assert.equal(sync.roomFor(tab("workflows/users/bob/a.json")), null);
+    assert.equal(sync.privacyOf(tab("workflows/users/bob/a.json")), "private");
+    assert.equal(sync.roomFor(tab("workflows/Unsaved Workflow.json", true)), null);
+    assert.equal(sync.privacyOf(tab("workflows/Unsaved Workflow.json", true)), "unsaved");
+    assert.ok(isPrivatePath("workflows/users") && !isPrivatePath("workflows/usersx/a.json"));
 });

@@ -1,5 +1,18 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+
+- Sharing follows folders: every saved workflow outside a private folder is live while it is open, with nothing to share by hand. Unsaved tabs and files in *My files* stay private
+- The **Live** list shows the workflows someone has open right now, with their folder and who is in them; the Files tab marks live files
+- A private workflow's panel offers **Move to Shared…** to take it live
+- Deleting a live file closes it for the people who have it open (a snapshot is kept); moving one into a private folder takes it out of live sharing
+
+### Removed
+
+- *Share this tab*, *Stop sharing*, the automatic-sharing settings and the admin 🗑 for idle rooms
+
 ## 1.0.0
 
 First release of RigShare, a rewrite of [ComfyUI-Nexus](https://github.com/daxcay/ComfyUI-Nexus) 1.0.2 for the current ComfyUI frontend.

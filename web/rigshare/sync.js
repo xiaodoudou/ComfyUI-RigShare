@@ -1,9 +1,9 @@
 // Live sync of workflow tabs between browsers.
 //
-// Every shared tab maps to a room on the server: a saved workflow is the room
-// "file:<path>" (everyone opening the same file lands in the same room), an
-// unsaved tab joins a room only after "Share this tab" ("tmp:<id>", stored in
-// the workflow's extra so it survives reloads and travels with the doc).
+// Sharing follows folders: a saved workflow outside your private folder
+// (workflows/users/<name>/) is live as soon as it is open, in the room
+// "file:<path>" (everyone opening the same file lands in the same room).
+// Unsaved tabs and files in a private folder are never synced.
 //
 // Only the tab on screen is live. Switching tabs leaves the old room and joins
 // the new one; the server copy is authoritative when a room already exists.
@@ -14,8 +14,6 @@
 // nodes (move, resize, widget values, title, mode…) are applied in place;
 // anything structural (added/removed nodes, links, groups, subgraphs) reloads
 // the tab from the room document, keeping the local viewport.
-
-const LS_OVERRIDES = "rigshare.shareOverrides";
 
 import { applyPatch, itemId } from "./graphdoc.js";
 
@@ -82,6 +80,11 @@ export function diffSnapshots(base, snap) {
     return Object.keys(patch).length ? patch : null;
 }
 
+/** Files in someone's private folder (workflows/users/<name>/...) are never live. */
+export function isPrivatePath(path) {
+    return /^workflows\/users(\/|$)/.test(path || "");
+}
+
 function stripView(wf) {
     if (wf?.extra) {
         delete wf.extra.ds;
@@ -95,14 +98,9 @@ export class RoomSync extends EventTarget {
         this.app = app;
         this.api = api;
         this.client = client;
-        this.autoShareFiles = false;
-        this.autoShareUnsaved = false;
         this.loading = 0;       // a graph load (ours or ComfyUI's) is in progress
         this.ownLoad = 0;       // the load in progress was started by RigShare
         this.installLoadGuard();
-        this.optedOut = new WeakSet(); // unsaved tabs the user chose to keep private
-        this.seen = new WeakMap();      // unsaved tab -> nodes when first seen
-        this.overrides = this.loadOverrides();
 
         this.target = null;     // room info of the tab on screen, or null
         this.targetWf = null;   // that tab's workflow object
@@ -137,7 +135,18 @@ export class RoomSync extends EventTarget {
                 this.ready = false;
                 this.room = null;
             }
-            client.emit("toast", { severity: "warn", summary: "RigShare", detail: `You don't have access to "${msg.name}". Your tab stays as a private copy.` });
+            client.emit("toast", { severity: "warn", summary: "RigShare", detail: msg.reason || `You don't have access to "${msg.name}". Your tab stays as a private copy.` });
+            this.updateReadOnly();
+            this.emitState();
+        });
+        client.on("room_closed", (msg) => {
+            // The file was deleted: the tab stays open as a private copy.
+            this.denied.add(msg.room);
+            if (msg.room === this.targetKey) {
+                this.ready = false;
+                this.room = null;
+            }
+            client.emit("toast", { severity: "info", summary: "RigShare", detail: `"${msg.name}" was deleted. Your tab stays as a private copy.` });
             this.updateReadOnly();
             this.emitState();
         });
@@ -160,14 +169,6 @@ export class RoomSync extends EventTarget {
             this.emitState();
         });
         client.on("self", () => this.updateReadOnly());
-        client.on("unshared", (msg) => {
-            const detail = msg.removed
-                ? `"${msg.name}" is no longer shared.`
-                : msg.others.length
-                    ? `You left "${msg.name}". Still shared with ${msg.others.join(", ")}.`
-                    : `You left "${msg.name}".`;
-            client.emit("toast", { severity: "info", summary: "RigShare", detail });
-        });
 
         api.addEventListener("graphChanged", () => this.checkLocal());
         window.addEventListener("pointerdown", (e) => {
@@ -214,33 +215,25 @@ export class RoomSync extends EventTarget {
 
     // ----- which room does a tab belong to --------------------------------
 
-    loadOverrides() {
-        try { return JSON.parse(localStorage.getItem(LS_OVERRIDES)) || {}; } catch { return {}; }
-    }
-
-    saveOverrides() {
-        try { localStorage.setItem(LS_OVERRIDES, JSON.stringify(this.overrides)); } catch { /* ignore */ }
-    }
-
     tabName(wf) {
         return (wf.filename ?? wf.path?.split("/").pop() ?? "Workflow").replace(/\.json$/, "");
     }
 
-    roomFor(wf, extra) {
+    /** Why a tab is not live: "unsaved", "private", or null when it is shared. */
+    privacyOf(wf) {
         if (!wf) return null;
-        if (!wf.isTemporary) {
-            const shared = this.overrides[wf.path] ?? this.autoShareFiles;
-            return shared ? { key: `file:${wf.path}`, name: this.tabName(wf), kind: "file" } : null;
-        }
-        extra ??= (wf.changeTracker?.activeState ?? wf.activeState)?.extra;
-        const id = extra?.rigshare?.room;
-        return id ? { key: id, name: this.tabName(wf), kind: "tmp" } : null;
+        if (wf.isTemporary || !wf.path?.startsWith("workflows/")) return "unsaved";
+        return isPrivatePath(wf.path) ? "private" : null;
+    }
+
+    roomFor(wf) {
+        if (!wf || this.privacyOf(wf)) return null;
+        return { key: `file:${wf.path}`, name: this.tabName(wf), kind: "file" };
     }
 
     activeRoom() {
         const wf = this.store?.activeWorkflow;
-        // For the tab on screen, read the live graph (share flag may be fresh).
-        const room = this.roomFor(wf, this.graph()?.extra);
+        const room = this.roomFor(wf);
         return { wf, room: room && this.denied.has(room.key) ? null : room };
     }
 
@@ -254,7 +247,6 @@ export class RoomSync extends EventTarget {
 
     tick() {
         if (!this.client.online || !this.store) return;
-        this.maybeAutoShare();
         const { wf, room } = this.activeRoom();
         const key = room?.key ?? null;
         if (key !== this.targetKey || (key && wf !== this.targetWf)) {
@@ -441,68 +433,10 @@ export class RoomSync extends EventTarget {
         } else if (!lock && this.readOnlyForced) {
             canvas.read_only = false;
             this.readOnlyForced = false;
-        this.room = null;       // {role, manage, restricted, owner} of the joined room
-        this.denied = new Set(); // rooms we were refused; not retried until access changes
-        this.inFlight = 0;      // our patches not yet acknowledged
-        this.crossed = false;   // a remote patch arrived while ours were in flight
         }
     }
 
     // ----- actions --------------------------------------------------------
-
-    /** Start sharing the tab on screen. */
-    shareCurrent() {
-        const wf = this.store?.activeWorkflow;
-        if (!wf) return;
-        if (wf.isTemporary) {
-            const graph = this.graph();
-            graph.extra ??= {};
-            graph.extra.rigshare = { room: `tmp:${crypto.randomUUID?.() ?? Date.now().toString(36)}` };
-            wf.changeTracker?.checkState();
-        } else {
-            this.overrides[wf.path] = true;
-            this.saveOverrides();
-        }
-        this.tick();
-    }
-
-    /**
-     * Unsaved tabs join a room on their own once someone edits them. Tabs that
-     * are merely open (the default workflow, restored tabs) stay private so the
-     * shared list is not flooded with untouched copies.
-     */
-    maybeAutoShare() {
-        const wf = this.store.activeWorkflow;
-        if (!this.autoShareUnsaved || !wf?.isTemporary || this.optedOut.has(wf)) return;
-        const graph = this.graph();
-        if (!graph || graph.extra?.rigshare?.room) return;
-        const sig = JSON.stringify(graph.serialize().nodes);
-        const seen = this.seen.get(wf);
-        const now = performance.now();
-        // Keep re-baselining while the tab is still loading/settling.
-        if (!seen || now - seen.at < 3000) {
-            this.seen.set(wf, { sig, at: seen?.at ?? now });
-            if (seen) seen.sig = sig;
-            return;
-        }
-        if (sig !== seen.sig && graph.nodes?.length) this.shareCurrent();
-    }
-
-    /** Stop sharing the tab on screen (keeps a private copy). */
-    unshareCurrent() {
-        const wf = this.store?.activeWorkflow;
-        if (!wf) return;
-        if (this.targetKey) this.client.send({ type: "unshare", room: this.targetKey });
-        if (wf.isTemporary) {
-            this.optedOut.add(wf);
-            delete this.graph().extra?.rigshare;
-            wf.changeTracker?.checkState();
-        } else {
-            this.overrides[wf.path] = false;
-            this.saveOverrides();
-        }
-        this.tick();
-    }
 
     /**
      * ComfyUI replaces the graph first and only then switches the active tab
@@ -573,18 +507,14 @@ export class RoomSync extends EventTarget {
         return null;
     }
 
-    /** Open a room from the list (switching to its tab if already open). */
+    /** Open a live workflow from the list (switching to its tab if already open). */
     async openRoom(room) {
         const store = this.store;
         let wf = this.findTab(room);
         if (wf && wf === store.activeWorkflow) return;
         const data = await this.client.request("GET", `/rigshare/api/room?key=${encodeURIComponent(room.key)}`);
-        if (!wf && room.kind === "file") {
+        if (!wf) {
             const path = room.key.slice(5);
-            if (this.overrides[path] === false) {
-                delete this.overrides[path];
-                this.saveOverrides();
-            }
             await store.syncWorkflows?.();
             wf = store.getWorkflowByPath?.(path) ?? null;
             if (wf && !wf.isLoaded) await wf.load();
@@ -597,10 +527,8 @@ export class RoomSync extends EventTarget {
                 this.ownLoad--;
             }
         } else {
-            // Unsaved shared tab (or a file that no longer exists): open a
-            // temporary tab carrying the room id.
+            // The file no longer exists: open its last live state as an unsaved copy.
             const doc = structuredClone(data.doc || {});
-            doc.extra = { ...(doc.extra || {}), rigshare: { room: room.key } };
             this.ownLoad++;
             try {
                 await this.app.loadGraphData(doc, true, true, `${room.name}.json`);

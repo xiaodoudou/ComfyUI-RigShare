@@ -1,9 +1,9 @@
 """Real-time hub: presence, chat, cursors, server stats and shared rooms.
 
-Every workflow tab that is shared maps to a *room* (a saved workflow file is
-the room ``file:<path>``; a shared unsaved tab is ``tmp:<id>``). The server
-holds the authoritative document of each room and relays patches between the
-browsers that currently have that room on screen.
+Sharing follows folders: every saved workflow outside a private folder is a
+*room* (``file:<path>``) while it is open. The server holds the authoritative
+document of each room and relays patches between the browsers that currently
+have it on screen. Unsaved tabs and private files never get a room.
 
 Clients identify once (session token or guest id); from then on the server
 stamps relayed messages with the sender identity and checks permissions.
@@ -21,6 +21,7 @@ from aiohttp import web, WSMsgType
 
 from .graphdoc import apply_patch, remap_conflicts
 from .stats import collect_stats
+from .workspace import Workspace
 
 log = logging.getLogger("ComfyUI-RigShare")
 
@@ -35,6 +36,13 @@ def clean_text(text, limit):
 
 
 ROLES = ("view", "edit")
+
+
+def is_live_key(key):
+    """Only saved workflows outside a private folder can be live."""
+    if not isinstance(key, str) or not key.startswith("file:workflows/"):
+        return False
+    return Workspace.area(key[len("file:workflows/"):])[0] not in ("private", "users-root")
 
 
 class Room:
@@ -91,6 +99,10 @@ class Hub:
         self.clients = {}
         self.rooms = {}
         for data in store.load_rooms():
+            if not is_live_key(data.get("key")):
+                # Unsaved-tab rooms and private files from older versions.
+                store.delete_room(data.get("key", ""))
+                continue
             try:
                 self.rooms[data["key"]] = Room(data["key"], data.get("name") or data["key"], data.get("kind", "file"),
                                                data.get("doc"), data.get("version", 0), data.get("updated"),
@@ -225,23 +237,22 @@ class Hub:
             except Exception:
                 pass
 
-    def drop_if_unused(self, key):
-        """Forget an unsaved-tab room nobody edited once its last member leaves."""
-        room = self.rooms.get(key)
-        if room and room.kind == "tmp" and room.version == 0 and not self.members(key):
-            self.rooms.pop(key, None)
+    async def drop_rooms(self, prefix, by, label="Before delete"):
+        """The file (or folder) is gone or went private: forget its rooms. Snapshots are kept."""
+        dropped = False
+        for key in list(self.rooms):
+            if key != prefix and not key.startswith(prefix + "/"):
+                continue
+            room = self.rooms.pop(key)
             self.store.delete_room(key)
-
-    def remove_room(self, key, by):
-        """Stop sharing a workflow nobody has open. Snapshots are kept."""
-        room = self.rooms.get(key)
-        if room is None or self.members(key):
-            return False
-        if room.doc is not None and room.version > 0:
-            self.snapshot(room, by, "Before unshare")
-        self.rooms.pop(key, None)
-        self.store.delete_room(key)
-        return True
+            if room.doc is not None and room.version > 0:
+                self.snapshot(room, by, label)
+            for client in self.members(key):
+                client.room = None
+                await self.send(client, {"type": "room_closed", "room": key, "name": room.name})
+            dropped = True
+        if dropped:
+            await self.broadcast_presence()
 
     def members(self, key):
         return [c for c in self.clients.values() if c.kind and c.room == key]
@@ -285,13 +296,13 @@ class Hub:
                 "restricted": bool(room.acl), "owner": room.owner}
 
     def room_list(self, client=None):
-        cutoff = time.time() - 7 * 86400
+        """Live workflows: the rooms someone has open right now."""
         out = []
         for room in self.rooms.values():
             if client is not None and self.client_access(room, client) is None:
                 continue
             members = [c.id for c in self.members(room.key)]
-            if members or room.updated > cutoff:
+            if members:
                 out.append({"key": room.key, "name": room.name, "kind": room.kind, "version": room.version,
                             "updated": int(room.updated), "members": members,
                             "nodes": len((room.doc or {}).get("nodes") or []),
@@ -339,12 +350,14 @@ class Hub:
             if key == old_prefix or key.startswith(old_prefix + "/"):
                 room = self.rooms.pop(key)
                 self.store.delete_room(key)
+                for client in self.members(key):
+                    client.room = None
                 room.key = new_prefix + key[len(old_prefix):]
+                if not is_live_key(room.key):
+                    continue  # moved into a private folder: no longer live
                 room.name = room.key.rsplit("/", 1)[-1].removesuffix(".json")
                 room.dirty = True
                 self.rooms[room.key] = room
-                for client in self.members(key):
-                    client.room = None
                 moved.append(room.key)
         return moved
 
@@ -422,8 +435,6 @@ class Hub:
             log.error(f"[RigShare] websocket error: {e}")
         finally:
             self.clients.pop(client.id, None)
-            if client.room:
-                self.drop_if_unused(client.room)
             if client.kind:
                 await self.broadcast({"type": "leave", "id": client.id})
                 await self.broadcast_presence()
@@ -462,13 +473,16 @@ class Hub:
             previous = client.room
             if not key:
                 client.room = None
+            elif not is_live_key(key):
+                client.room = None
+                await self.send(client, {"type": "room_denied", "room": key, "name": clean_text(data.get("name"), 120) or key,
+                                         "reason": "Only saved workflows outside a private folder are live."})
             else:
                 room = self.rooms.get(key)
                 created = False
                 if room is None:
                     doc = data.get("doc") if isinstance(data.get("doc"), dict) else {}
-                    room_kind = "file" if key.startswith("file:") else "tmp"
-                    room = Room(key, clean_text(data.get("name"), 120) or key, room_kind, doc,
+                    room = Room(key, clean_text(data.get("name"), 120) or key, "file", doc,
                                 owner=client.key if client.kind == "user" else None)
                     room.dirty = True
                     self.rooms[key] = room
@@ -485,24 +499,7 @@ class Hub:
             if previous != client.room:
                 if previous:
                     await self.broadcast({"type": "leave", "id": client.id}, room=previous)
-                    self.drop_if_unused(previous)
                 await self.broadcast_presence()
-
-        elif kind == "unshare":
-            # Leave the room; an admin also removes it from the shared list if nobody else is in it.
-            key = data.get("room")
-            room = self.rooms.get(key)
-            if room is None:
-                return
-            if client.room == key:
-                client.room = None
-                await self.broadcast({"type": "leave", "id": client.id}, room=key)
-            others = self.members(key)
-            # Only admins remove a workflow from the shared list; others just leave.
-            removed = not others and client.perms.get("admin") and self.remove_room(key, client.name)
-            await self.send(client, {"type": "unshared", "room": key, "name": room.name, "removed": removed,
-                                     "others": [c.name for c in others]})
-            await self.broadcast_presence()
 
         elif kind == "cursor":
             if not client.room:
