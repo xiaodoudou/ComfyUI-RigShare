@@ -244,6 +244,21 @@ body.rs-no-manager [aria-label="ComfyUI Manager"] { display: none !important; }
 .rs-mini-queue { color: var(--rs-muted); text-align: center; margin-top: 2px; }
 
 /* remote cursors (DOM layer above canvas content) */
+.rs-dock { position: fixed; left: 64px; bottom: 16px; z-index: 1100; display: flex; gap: 4px; padding: 4px;
+  background: var(--rs-bg); border: 1px solid var(--rs-border); border-radius: 12px; box-shadow: 0 6px 24px rgb(0 0 0 / .35); }
+.rs-dock-btn { position: relative; width: 36px; height: 36px; display: grid; place-items: center; border: 0; border-radius: 8px;
+  background: none; color: var(--rs-muted); cursor: pointer; }
+.rs-dock-btn .pi { font-size: 16px; }
+.rs-dock-btn:hover { color: var(--rs-fg); background: var(--rs-bg2); }
+.rs-dock-btn.active { color: var(--rs-accent-fg); background: var(--rs-accent); }
+.rs-dock-badge { display: none; position: absolute; top: 1px; right: 1px; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px;
+  background: #ef4444; color: #fff; font-size: 10px; line-height: 16px; font-weight: 700; }
+.rs-dock-drawer { position: fixed; top: 8px; bottom: 64px; left: 64px; width: min(380px, calc(100vw - 80px)); z-index: 1100;
+  background: var(--rs-bg); border: 1px solid var(--rs-border); border-radius: 12px; box-shadow: 0 12px 40px rgb(0 0 0 / .45); overflow: hidden; }
+.rs-dock-drawer-body { height: 100%; }
+.rs-dock-drawer .rs-header { padding-right: 40px; }
+.rs-dock-close { position: absolute; top: 8px; right: 8px; z-index: 2; border: 0; background: none; color: var(--rs-muted); cursor: pointer; padding: 4px; }
+.rs-dock-close:hover { color: var(--rs-fg); }
 .rs-cursor-layer { position: fixed; inset: 0; pointer-events: none; z-index: 900; overflow: hidden; }
 .rs-cursor { position: absolute; left: 0; top: 0; will-change: transform; transition: transform 70ms linear; }
 .rs-cursor svg { display: block; filter: drop-shadow(0 1px 1px rgb(0 0 0 / .4)); }

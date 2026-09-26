@@ -11,6 +11,7 @@ import { STYLES } from "./styles.js";
 import { installSaveDialog } from "./save-dialog.js";
 import { FilesBrowser, openFromWorkspace } from "./files.js";
 import { h } from "./ui.js";
+import { AppDock } from "./app-dock.js";
 
 const TAB_ID = "rigshare";
 const ICON_CLASS = "rigshare-tab-icon";
@@ -330,11 +331,24 @@ app.registerExtension({
         });
         client.on("self", () => { if (filesPanel.isConnected) filesBrowser.reload(); });
 
+        // ComfyUI's App view hides extension sidebar tabs: offer them in a dock there.
+        const dock = new AppDock({
+            sync,
+            views: {
+                [TAB_ID]: { icon: "pi-users", title: "RigShare", mount: (el) => panel.mount(el), unmount: () => panel.unmount() },
+                files: {
+                    icon: "pi-folder-open", title: "Files",
+                    mount: (el) => { el.replaceChildren(filesPanel); filesBrowser.reload(); },
+                },
+            },
+        });
+
         // The registered tab object is wrapped by Vue; mutating it through the
         // store keeps the unread badge reactive.
         panel.onBadge = (badge) => {
             const tab = app.extensionManager.getSidebarTabs?.().find((t) => t.id === TAB_ID);
             if (tab) tab.iconBadge = badge;
+            dock.setBadge(TAB_ID, badge);
             setBlink(!!badge);
         };
         panel.onNotify = () => {
