@@ -6,6 +6,10 @@
 
 - App mode: the **RigShare** and **Files** buttons open their tabs in ComfyUI's docked side panel, like Assets and Apps, instead of a floating drawer
 
+### Fixed
+
+- Switching between the App view and the graph with the RigShare or Files panel open left the panel blank
+
 ## 1.2.0 (2026-09-26)
 
 ComfyUI's App mode works with RigShare, and every save keeps a snapshot.

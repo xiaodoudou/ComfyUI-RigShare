@@ -14,6 +14,32 @@ import { h } from "./ui.js";
 import { AppDock } from "./app-dock.js";
 
 const TAB_ID = "rigshare";
+const FILES_TAB_ID = "rigshare-files";
+
+/** Remembers the side panel elements each custom tab was rendered into and keeps
+ *  the tab's content in whichever of them is on screen. */
+class SlotTracker {
+    constructor(app, tabs) {
+        this.app = app;
+        this.tabs = tabs;
+        this.slots = Object.fromEntries(Object.keys(tabs).map((id) => [id, new Set()]));
+        setInterval(() => this.check(), 300);
+    }
+
+    add(id, el) {
+        this.slots[id]?.add(el);
+    }
+
+    check() {
+        const active = this.app.extensionManager?.sidebarTab?.activeSidebarTabId;
+        for (const [id, set] of Object.entries(this.slots)) {
+            for (const el of set) if (!el.isConnected) set.delete(el);
+            if (id !== active) continue;
+            const visible = [...set].find((el) => el.getClientRects().length > 0);
+            if (visible && !this.tabs[id].has(visible)) this.tabs[id].fill(visible);
+        }
+    }
+}
 const ICON_CLASS = "rigshare-tab-icon";
 
 function setting(id, fallback) {
@@ -279,6 +305,18 @@ app.registerExtension({
         installSaveDialog(app, api, client, sync);
         presence.install();
 
+        // ComfyUI keeps a separate side panel for the graph and the App view and
+        // shows the old one again without asking the tab to render: follow the
+        // visible one, or the panel comes back blank after switching views.
+        let filesPanelRef = () => null; // set once the Files panel is built below
+        const slots = new SlotTracker(app, {
+            [TAB_ID]: { has: (el) => el.contains(panel.root), fill: (el) => panel.mount(el) },
+            [FILES_TAB_ID]: {
+                has: (el) => !filesPanelRef() || el.contains(filesPanelRef()),
+                fill: (el) => { if (el.contains(panel.root)) panel.unmount(); el.replaceChildren(filesPanelRef()); },
+            },
+        });
+
         app.extensionManager.registerSidebarTab({
             id: TAB_ID,
             icon: `pi pi-users ${ICON_CLASS}`,
@@ -287,7 +325,7 @@ app.registerExtension({
             label: "RigShare",
             type: "custom",
             iconBadge: null,
-            render: (el) => panel.mount(el),
+            render: (el) => { slots.add(TAB_ID, el); panel.mount(el); },
             destroy: () => panel.unmount(),
         });
 
@@ -312,15 +350,17 @@ app.registerExtension({
                     onclick: () => app.extensionManager.command.execute("Comfy.OpenWorkflow"),
                 }, h("i", { class: "pi pi-upload" }), "From computer")),
             h("div", { class: "rs-body" }, filesBrowser.el));
+        filesPanelRef = () => filesPanel;
         let filesLoaded = false;
         app.extensionManager.registerSidebarTab({
-            id: "rigshare-files",
+            id: FILES_TAB_ID,
             icon: "pi pi-folder-open",
             title: "Files",
             tooltip: "RigShare files: My files and Shared",
             label: "Files",
             type: "custom",
             render: (el) => {
+                slots.add(FILES_TAB_ID, el);
                 el.classList.add("rs-host");
                 // Same slot element as the RigShare tab when switching between them
                 // (ComfyUI only calls destroy on unmount): take it over cleanly.
@@ -336,7 +376,7 @@ app.registerExtension({
             app, sync,
             views: {
                 [TAB_ID]: { icon: "pi-users", title: "RigShare", tabId: TAB_ID },
-                files: { icon: "pi-folder-open", title: "Files", tabId: "rigshare-files" },
+                files: { icon: "pi-folder-open", title: "Files", tabId: FILES_TAB_ID },
             },
         });
 
