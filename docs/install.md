@@ -49,11 +49,20 @@ The data folder is `<ComfyUI base path>/rigshare`; point it elsewhere with `RIGS
 | `sessions.json` | Active logins (session ids, not tokens) |
 | `secret.key` | Key that signs session tokens. Keep it private |
 | `config.json` | Server settings, see [Settings](settings.md) |
-| `rooms/` | Current state of every shared workflow |
+| `folders.json` | Shared folders: owners and access lists |
+| `rooms/` | Latest live state of each workflow |
 | `snapshots/` | Workflow history |
 | `chat.jsonl` | The whole chat history, one message per line |
 
 Back up the folder to keep accounts and history. Deleting `secret.key` signs everyone out.
+
+## Upgrading from RigShare 1.0
+
+Update the folder (`git pull`, or ComfyUI Manager) and restart ComfyUI. Then:
+
+- Workflows already at the top level become *common*: everyone can open them, and they are live while open. Move personal ones into each person's **My files**, and group shared ones in **Shared** folders. Admins can do this for everyone from **Files → All**.
+- Access lists set on individual workflows are dropped. Restrict a shared folder instead.
+- The chat history moves from `chat.json` to `chat.jsonl` on the first start, with nothing lost. From then on, all of it is kept.
 
 ## Upgrading from ComfyUI-Nexus
 

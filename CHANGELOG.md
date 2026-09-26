@@ -1,28 +1,38 @@
 # Changelog
 
-## Unreleased
+## 1.1.0 (2026-09-26)
+
+Workflows now live in folders, like a shared drive, and sharing follows them.
+
+### Added
+
+- **Workspace folders**: a private **My files** folder per account (`users/<name>/`), **Shared** folders owned by whoever creates them, and common workflows at the top level. The server enforces them on ComfyUI's own file API, and ComfyUI's workflow browser lists only what you can open
+- **Files** sidebar tab with **My files**, **Shared** and, for admins, **All** (the whole workflows folder); new folders, rename, move and delete; a green dot on live files; **From computer**
+- **Save asks where**: a name plus the same folder tabs, starting in My files or the last folder used
+- **Open from RigShare…** in the Workflow menu (Ctrl+Alt+O)
+- Folder access lists: a shared folder's owner or an admin can restrict it to chosen people, each with view or edit. For a live workflow in a folder you own, *This tab* shows **Folder access**
+- Only admins delete common workflows; a shared folder's owner deletes in that folder; you delete in yours
+- Whole chat history: stored in `chat.jsonl` with no limit (`chat_keep` trims it). The panel shows the latest 50 messages and loads older ones as you scroll up, with date dividers. The old `chat.json` is imported once
+- Test suite: pytest unit and end-to-end tests against a real aiohttp server, Node tests for the client, and a GitHub Actions workflow
 
 ### Changed
 
-- Sharing follows folders: every saved workflow outside a private folder is live while it is open, with nothing to share by hand. Unsaved tabs and files in *My files* stay private
-- The **Live** list shows the workflows someone has open right now, with their folder and who is in them; the Files tab marks live files
-- A private workflow's panel offers **Move to Shared…** to take it live
-- Deleting a live file closes it for the people who have it open (a snapshot is kept); moving one into a private folder takes it out of live sharing
-- Renaming or moving a file or folder re-points everyone's open tabs to the new path, so nobody recreates it under the old name. People who can't open the new location are told nothing about it and keep a private copy
-
-- The Files tab has **My files**, **Shared** and, for admins, **All** tabs instead of a Home screen; the same tabs appear in the Open, Save and Move dialogs
-- Who can open a workflow now follows its folder only. For a live workflow in a folder you own, *This tab* shows **Folder access**
-
-- Chat keeps its whole history (`chat.jsonl`, `chat_keep` to trim) instead of the last 200 messages. The panel shows the latest 50 and loads older ones as you scroll up, with date dividers. The old `chat.json` is imported once
+- Sharing follows folders: every saved workflow outside a private folder is live while it is open, with nothing to share by hand. Unsaved tabs and files in My files stay private
+- The **Live** tab lists the workflows someone has open right now, with their folder and who is in them. A private workflow's panel offers **Move to Shared…**
+- Renaming or moving a workflow or folder keeps everyone's open tabs on it, under the new name. People who can't open the new location learn nothing about it and keep a private copy
+- Deleting a live workflow closes it for the people who have it open, keeping a snapshot; moving one into a private folder takes it out of live sharing
+- Who can open a workflow follows its folder only
 
 ### Fixed
 
+- Opening a file could overwrite the shared workflow of the previous tab
 - Switching straight between the RigShare and Files sidebar tabs could leave the previous tab's content on screen
 
 ### Removed
 
-- Per-workflow access lists (restrict the folder instead). Lists set on individual workflows before are dropped
+- Per-workflow access lists (restrict the folder instead). Lists set on individual workflows are dropped
 - *Share this tab*, *Stop sharing*, the automatic-sharing settings and the admin 🗑 for idle rooms
+- Live rooms for unsaved tabs (`tmp:`): save the workflow outside My files to work on it together
 
 ## 1.0.0
 
