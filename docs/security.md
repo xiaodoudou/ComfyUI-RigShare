@@ -29,7 +29,7 @@ What RigShare does to keep the rig yours, and what it leaves to you.
 - ComfyUI's queue, interrupt, free and upload endpoints are checked server-side, and so are saving (Edit) and deleting (Admin) workflow files (`api_protection`).
 - Without *Admin*, account and server settings are refused.
 - Without *Manager*, ComfyUI Manager's API is refused and its button hidden. Only a few read-only lookups the frontend makes for everyone stay open.
-- A restricted workflow is refused to anyone not on its list: joining it, reading it, its snapshots, and its file through ComfyUI's API.
+- A workflow in a restricted folder is refused to anyone not on the folder's list: joining it, reading it, its snapshots, and its file through ComfyUI's API.
 
 ## What is up to you
 

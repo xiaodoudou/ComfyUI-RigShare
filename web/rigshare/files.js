@@ -1,21 +1,22 @@
 // Drive-style file browser for the RigShare workspace.
 //
-//   Home ─┬─ My files        users/<you>/…      only you (and admins)
-//         ├─ Shared          shared folders + the common top level
-//         └─ Everyone's files (admins)
+//   [My files]  users/<you>/…      only you (and admins)
+//   [Shared]    shared folders + the common top level
+//   [All]       the whole workflows folder, everyone's files (admins)
 //
 // One component serves the Files tab ("browse"), the "Open from RigShare"
 // dialog ("open"), the Save dialog ("save") and the "Move to…" picker ("pick").
 
 import { h, timeAgo, storage } from "./ui.js";
 
-const HOME = "@home";
 const SHARED = "@shared";
+const ALL = "";
 
 export class FilesBrowser {
     constructor({ app, client, sync, mode = "browse", start, onOpenFile, onPickFile, onChange, accessEditor }) {
         Object.assign(this, { app, client, sync, mode, onOpenFile, onPickFile, onChange, accessEditor });
-        this.path = start || HOME;
+        this.path = null;
+        this.tab = null;
         this.listing = null;
         this.filter = "";
         this.accessFor = null;
@@ -26,23 +27,61 @@ export class FilesBrowser {
             onkeydown: (e) => e.stopPropagation(),
         });
         this.actions = h("div", { class: "rs-fb-actions" });
+        this.tabsEl = h("div", { class: "rs-fb-tabs", role: "tablist" });
         this.list = h("div", { class: "rs-fb-list" });
         this.el = h("div", { class: `rs-fb rs-fb-${mode}` },
+            this.tabsEl,
             h("div", { class: "rs-fb-bar" }, this.crumbs, this.actions),
             h("div", { class: "rs-fb-tools" }, this.search),
             this.list);
         // The sidebar browser lives as long as the page: keep its live dots current.
         if (mode === "browse") client.on("presence", () => { if (this.listing && this.el.isConnected) this.renderList(); });
+        this.setStart(start);
     }
 
     get me() {
         return this.client.self?.key;
     }
 
+    /** The folder tabs: each is a root the browser can't go above. */
+    get tabs() {
+        return [
+            this.me ? { id: "mine", label: "My files", icon: "pi-user", root: `users/${this.me}`, hint: "Only you" } : null,
+            { id: "shared", label: "Shared", icon: "pi-users", root: SHARED, hint: "Shared folders and common workflows" },
+            this.client.perms.admin ? { id: "all", label: "All", icon: "pi-shield", root: ALL, hint: "The whole workflows folder, everyone's files (admins)" } : null,
+        ].filter(Boolean);
+    }
+
+    /** Which tab a path belongs to when opened directly (not through a tab). */
+    tabFor(path) {
+        const ids = this.tabs.map((t) => t.id);
+        if (this.me && (path === `users/${this.me}` || path?.startsWith(`users/${this.me}/`))) return "mine";
+        if (path === ALL || path === "users" || path?.startsWith("users/")) return ids.includes("all") ? "all" : ids[0];
+        return "shared";
+    }
+
+    setStart(start) {
+        if (start === undefined || start === null || start === "@home") start = this.me ? `users/${this.me}` : SHARED;
+        this.tab = this.tabFor(start);
+        const allowed = this.tab === "all" || this.tab === "shared" || start.startsWith(`users/${this.me}`);
+        this.path = allowed && !(this.tab === "shared" && (start === ALL || start.startsWith("users"))) ? start : this.currentTab.root;
+    }
+
+    get currentTab() {
+        return this.tabs.find((t) => t.id === this.tab) ?? this.tabs[0];
+    }
+
+    async switchTab(id) {
+        const tab = this.tabs.find((t) => t.id === id);
+        if (!tab) return;
+        this.tab = id;
+        await this.go(tab.root);
+    }
+
     /** Folder path usable for saving ("" is the common top level), or null. */
     get saveFolder() {
         if (!this.listing || this.listing.role !== "edit") return null;
-        if (this.path === HOME || this.path === "users") return null;
+        if (this.path === "users") return null;
         return this.path === SHARED ? "" : this.path;
     }
 
@@ -70,20 +109,19 @@ export class FilesBrowser {
     }
 
     async reload() {
-        if (this.path === HOME) {
-            const entries = [];
-            if (this.me) entries.push({ type: "home", path: `users/${this.me}`, name: "My files", hint: "Only you", icon: "pi-user" });
-            entries.push({ type: "home", path: SHARED, name: "Shared", hint: "Shared folders and common workflows", icon: "pi-users" });
-            if (this.client.perms.admin) entries.push({ type: "home", path: "users", name: "Everyone's files", hint: "Private folders of every account (admins)", icon: "pi-shield" });
-            this.listing = { path: HOME, role: "view", entries, can_mkdir: false };
-        } else {
-            this.list.replaceChildren(h("div", { class: "rs-fb-empty" }, h("i", { class: "pi pi-spin pi-spinner" })));
-            try {
-                this.listing = await this.client.request("GET", `/rigshare/api/workspace/list?path=${encodeURIComponent(this.path)}`);
-            } catch (e) {
-                this.toast("error", e.message);
-                if (this.path !== HOME) return this.go(HOME);
-            }
+        // Tabs depend on who is signed in (admin, username): keep the current one valid.
+        if (!this.tabs.some((t) => t.id === this.tab)) {
+            this.tab = this.tabs[0].id;
+            this.path = this.tabs[0].root;
+        }
+        this.list.replaceChildren(h("div", { class: "rs-fb-empty" }, h("i", { class: "pi pi-spin pi-spinner" })));
+        try {
+            this.listing = await this.client.request("GET", `/rigshare/api/workspace/list?path=${encodeURIComponent(this.path)}`);
+        } catch (e) {
+            this.toast("error", e.message);
+            this.listing = null;
+            const root = this.currentTab.root;
+            if (this.path !== root) return this.go(root);
         }
         this.render();
         this.onChange?.(this);
@@ -91,35 +129,32 @@ export class FilesBrowser {
 
     // ----- breadcrumbs ------------------------------------------------------
 
+    /** Breadcrumbs from the current tab's root down to the current folder. */
     trail() {
-        const out = [{ label: "Home", path: HOME, icon: "pi-home" }];
+        const tab = this.currentTab;
+        const out = [{ label: tab.label, path: tab.root }];
         const p = this.path;
-        if (p === HOME) return out;
+        if (p === tab.root) return out;
         const parts = p.split("/");
-        if (p === SHARED) return [...out, { label: "Shared", path: SHARED }];
-        if (parts[0] === "users") {
-            if (parts[1] === this.me) {
-                out.push({ label: "My files", path: `users/${this.me}` });
-                parts.slice(2).forEach((part, i) => out.push({ label: part, path: parts.slice(0, i + 3).join("/") }));
-            } else {
-                out.push({ label: "Everyone's files", path: "users" });
-                parts.slice(1).forEach((part, i) => out.push({ label: part, path: parts.slice(0, i + 2).join("/") }));
-            }
-            return out;
-        }
-        out.push({ label: "Shared", path: SHARED });
-        const rest = parts[0] === "shared" ? parts.slice(1) : parts;
-        const offset = parts[0] === "shared" ? 1 : 0;
-        rest.forEach((part, i) => out.push({ label: part, path: parts.slice(0, i + 1 + offset).join("/") }));
+        // Number of leading path parts the tab root stands for.
+        let skip = 0;
+        if (tab.id === "mine") skip = 2;
+        else if (tab.id === "shared" && parts[0] === "shared") skip = 1;
+        parts.slice(skip).forEach((part, i) => out.push({ label: part, path: parts.slice(0, i + 1 + skip).join("/") }));
         return out;
     }
 
     /** Human label of the current folder, e.g. "My files / renders". */
     get label() {
-        return this.trail().slice(1).map((c) => c.label).join(" / ") || "Home";
+        return this.trail().map((c) => c.label).join(" / ");
     }
 
     render() {
+        this.tabsEl.replaceChildren(...this.tabs.map((t) => h("button", {
+            class: `rs-fb-tab ${t.id === this.tab ? "active" : ""}`, role: "tab", title: t.hint,
+            "aria-selected": String(t.id === this.tab),
+            onclick: () => { if (t.id !== this.tab || this.path !== t.root) this.switchTab(t.id); },
+        }, h("i", { class: `pi ${t.icon}` }), h("span", {}, t.label))));
         const trail = this.trail();
         this.crumbs.replaceChildren(...trail.flatMap((c, i) => [
             i ? h("i", { class: "pi pi-angle-right rs-fb-sep" }) : null,
@@ -133,7 +168,6 @@ export class FilesBrowser {
             }, h("i", { class: "pi pi-folder-plus" })) : null,
             h("button", { class: "rs-btn rs-btn-icon", title: "Refresh", onclick: () => this.reload() }, h("i", { class: "pi pi-refresh" })),
         ].filter(Boolean));
-        this.el.querySelector(".rs-fb-tools").style.display = this.path === HOME ? "none" : "";
         this.renderList();
     }
 
@@ -153,12 +187,6 @@ export class FilesBrowser {
     }
 
     row(e) {
-        if (e.type === "home") {
-            return h("button", { class: "rs-fb-row rs-fb-home", onclick: () => this.go(e.path) },
-                h("i", { class: `pi ${e.icon} rs-fb-icon` }),
-                h("span", { class: "rs-grow rs-min0" }, h("div", { class: "rs-name" }, e.name), h("div", { class: "rs-muted rs-small" }, e.hint)),
-                h("i", { class: "pi pi-angle-right rs-muted" }));
-        }
         const isFolder = e.type === "folder";
         const owner = e.owner ? this.client.users.find((u) => u.key === e.owner)?.name ?? `@${e.owner}` : null;
         const meta = isFolder
@@ -303,7 +331,7 @@ export function modal(title, icon, body, footer) {
 
 /** Folder picker; resolves to a folder path ("" = common top level) or null. */
 export async function pickFolder({ app, client, sync, title, start }) {
-    const browser = new FilesBrowser({ app, client, sync, mode: "pick", start: start && start !== "@home" ? start : `users/${client.self?.key}` });
+    const browser = new FilesBrowser({ app, client, sync, mode: "pick", start });
     const choose = h("button", { class: "rs-btn rs-btn-primary" }, "Move here");
     const where = h("span", { class: "rs-muted rs-small rs-grow rs-ellipsis" });
     browser.onChange = () => {
@@ -319,7 +347,7 @@ export async function pickFolder({ app, client, sync, title, start }) {
 /** "Open from RigShare": browse and open a workflow. */
 export async function openFromWorkspace({ app, client, sync }) {
     const browser = new FilesBrowser({
-        app, client, sync, mode: "open", start: storage.get("rigshare.lastOpenFolder") || "@home",
+        app, client, sync, mode: "open", start: storage.get("rigshare.lastOpenFolder") ?? undefined,
         onOpenFile: async (path) => {
             storage.set("rigshare.lastOpenFolder", browser.path);
             m.close(true);

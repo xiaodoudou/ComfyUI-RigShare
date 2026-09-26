@@ -10,8 +10,12 @@
 - Deleting a live file closes it for the people who have it open (a snapshot is kept); moving one into a private folder takes it out of live sharing
 - Renaming or moving a file or folder re-points everyone's open tabs to the new path, so nobody recreates it under the old name. People who can't open the new location are told nothing about it and keep a private copy
 
+- The Files tab has **My files**, **Shared** and, for admins, **All** tabs instead of a Home screen; the same tabs appear in the Open, Save and Move dialogs
+- Who can open a workflow now follows its folder only. For a live workflow in a folder you own, *This tab* shows **Folder access**
+
 ### Removed
 
+- Per-workflow access lists (restrict the folder instead). Lists set on individual workflows before are dropped
 - *Share this tab*, *Stop sharing*, the automatic-sharing settings and the admin 🗑 for idle rooms
 
 ## 1.0.0

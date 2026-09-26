@@ -291,7 +291,6 @@ def setup(server, store, hub):
         except ValueError as e:
             return error(str(e))
         if user["username"] != username:
-            hub.rename_member(username, user["username"])
             if hub.workspace:
                 hub.workspace.rename_user(username, user["username"])
                 await hub.path_moved(f"workflows/users/{username}", f"workflows/users/{user['username']}",
@@ -308,7 +307,6 @@ def setup(server, store, hub):
         username = request.match_info["username"]
         try:
             store.delete_user(username)
-            hub.forget_member(username)
             if hub.workspace:
                 hub.workspace.forget_member(username)
         except KeyError:
@@ -492,41 +490,6 @@ def setup(server, store, hub):
                                    "admin": bool(u["perms"].get("admin")), "edit": bool(u["perms"].get("edit"))}
                                   for u in store.users.values()])
 
-    @routes.get("/rigshare/api/room/acl")
-    async def get_acl(request):
-        room = hub.rooms.get(request.query.get("key", ""))
-        if not room:
-            return error("No such room", 404)
-        if not hub.can_manage(room, *who(request)):
-            return error("Only the owner or an admin can manage access", 403)
-        return web.json_response({"key": room.key, "owner": room.owner, "restricted": bool(room.acl),
-                                  "members": (room.acl or {}).get("members") or {}})
-
-    @routes.put("/rigshare/api/room/acl")
-    async def put_acl(request):
-        body = await request.json()
-        room = hub.rooms.get(body.get("key", ""))
-        if not room:
-            return error("No such room", 404)
-        if not hub.can_manage(room, *who(request)):
-            return error("Only the owner or an admin can manage access", 403)
-        acl = None
-        if body.get("restricted"):
-            members = {}
-            for username, role in (body.get("members") or {}).items():
-                if username in store.users and role in ("view", "edit") and username != room.owner:
-                    members[username] = role
-            acl = {"members": members}
-            if room.owner is None:
-                # Someone must stay in charge besides admins: the person restricting it.
-                kind, key, _ = who(request)
-                if kind == "user":
-                    room.owner = key
-        await hub.set_acl(room, acl)
-        log.info(f"[RigShare] {display(request)} set access for {room.name}: "
-                 f"{'everyone' if acl is None else ', '.join(f'{u}={r}' for u, r in acl['members'].items()) or 'owner only'}")
-        return web.json_response({"ok": True, "owner": room.owner, "restricted": bool(acl)})
-
     @routes.get("/rigshare/api/room")
     async def get_room(request):
         room = hub.rooms.get(request.query.get("key", ""))
@@ -635,7 +598,7 @@ def setup(server, store, hub):
         return (action, src, None) if action else None
 
     def check_userdata(request, action, src, dest):
-        """Folder rules, then the per-workflow access list of a live room."""
+        """Folder rules (private spaces, restricted shared folders)."""
         kind, key, perms = who(request)
         w = hub.workspace
         can_edit = bool(perms.get("edit") or perms.get("admin"))
@@ -644,12 +607,7 @@ def setup(server, store, hub):
             rel = Workspace.workflows_rel(path)
             if rel is None:
                 return "edit"
-            folder = w.role(rel, kind, key, perms) if w else ("edit" if can_edit else "view")
-            room = hub.rooms.get("file:" + path)
-            if folder and room and room.acl:
-                from .workspace import min_role
-                folder = min_role(folder, hub.access(room, kind, key, perms))
-            return folder
+            return w.role(rel, kind, key, perms) if w else ("edit" if can_edit else "view")
 
         def deletable(path):
             rel = Workspace.workflows_rel(path)

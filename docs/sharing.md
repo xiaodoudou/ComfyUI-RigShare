@@ -34,19 +34,20 @@ Viewers (no *Edit* permission) see a read-only canvas. Anything they change loca
 ## When a workflow stops being live
 
 - When everyone closes it, it leaves the live list. The server keeps its latest state, so the next person to open it picks up where the others left off, saved or not. That state is forgotten after 14 days without anyone opening it (`room_expiry_days`).
-- Renaming or moving it (or its folder) keeps it live: everyone who has it open follows it to the new name, and its history and access list go with it.
+- Renaming or moving it (or its folder) keeps it live: everyone who has it open follows it to the new name, and its history goes with it.
 - Moving it into a private folder takes it out of live sharing straight away. Its owner's tab follows it; everyone else keeps a private copy.
 - Deleting it (admins, or the owner of its shared folder) closes it for the people who have it open. Their tabs stay as private copies, and a *Before delete* snapshot is kept.
 
 ## Who can open it
 
-By default everyone who can open its folder can open a live workflow, with their usual permissions. The **Access** button under *This tab* lets its owner (whoever opened it first) or any admin choose *Only people I choose* and give each person **Can view** or **Can edit**.
+Access follows the folder, not the workflow. To keep a workflow to some people, put it in a shared folder and restrict the folder: in the Files tab (🔒 on the folder), or with **Folder access** under *This tab* when the workflow on screen is in a folder you own. Choose *Only people I choose* and give each person **Can view** or **Can edit**.
 
-- The owner and admins always have access.
+- Workflows at the top level of Shared (not in a folder) can be opened by everyone with an account, with their usual permissions.
+- The folder's owner (whoever created it) and admins always have access.
 - A role can only narrow someone's account permissions: *Can edit* does nothing for an account without *Edit*.
 - People who lose access are taken out of the workflow straight away; their tab stays open as a private copy.
 - Without access, the workflow is gone from their list and from the People tab, and they cannot open it, its snapshots, or its file through ComfyUI.
-- A 🔒 marks restricted workflows in the list.
+- A 🔒 marks workflows in restricted folders in the live list.
 
 Saved workflow files still show up by name in ComfyUI's workflow browser; opening one without access is refused.
 

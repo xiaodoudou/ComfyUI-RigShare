@@ -52,7 +52,7 @@ export async function chooseLocation(app, api, client, sync, wf) {
         onChange: () => {
             save.disabled = browser.saveFolder === null;
             where.textContent = browser.saveFolder === null
-                ? (browser.path === "@home" ? "Choose My files or Shared" : "You cannot save in this folder")
+                ? "You cannot save in this folder"
                 : `Save in ${browser.label}`;
         },
     });

@@ -115,7 +115,7 @@ export class RoomSync extends EventTarget {
         this.pointerDown = false;
         this.lastEditor = null;
         this.readOnlyForced = false;
-        this.room = null;       // {role, manage, restricted, owner} of the joined room
+        this.room = null;       // {role, folder, restricted, manage} of the joined room
         this.denied = new Set(); // rooms we were refused; not retried until access changes
         this.inFlight = 0;      // our patches not yet acknowledged
         this.crossed = false;   // a remote patch arrived while ours were in flight
@@ -125,7 +125,7 @@ export class RoomSync extends EventTarget {
         client.on("room", (msg) => this.onRoom(msg));
         client.on("room_info", (msg) => {
             if (msg.room !== this.targetKey) return;
-            this.room = { role: msg.role, manage: msg.manage, restricted: msg.restricted, owner: msg.owner };
+            this.room = { role: msg.role, folder: msg.folder, restricted: msg.restricted, manage: msg.manage };
             this.updateReadOnly();
             this.emitState();
         });
@@ -250,12 +250,6 @@ export class RoomSync extends EventTarget {
         return { wf, room: room && this.denied.has(room.key) ? null : room };
     }
 
-    /** Change who can open the room on screen (owner or admin). */
-    async setAccess(restricted, members) {
-        if (!this.targetKey) return;
-        return await this.client.request("PUT", "/rigshare/api/room/acl", { key: this.targetKey, restricted, members });
-    }
-
     // ----- joining --------------------------------------------------------
 
     tick() {
@@ -294,7 +288,7 @@ export class RoomSync extends EventTarget {
     onRoom(msg) {
         if (msg.room !== this.targetKey) return;
         this.version = msg.version;
-        this.room = { role: msg.role, manage: msg.manage, restricted: msg.restricted, owner: msg.owner };
+        this.room = { role: msg.role, folder: msg.folder, restricted: msg.restricted, manage: msg.manage };
         if (msg.created || !msg.doc) {
             this.doc = this.serialize();
             this.ready = true;

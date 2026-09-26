@@ -179,6 +179,12 @@ body.rs-no-manager [aria-label="ComfyUI Manager"] { display: none !important; }
 .rs-files-logo { width: 28px; height: 28px; border-radius: 7px; display: grid; place-items: center; font-size: 15px;
   background: linear-gradient(135deg, #3b82f6, #a855f7); color: #fff; flex: none; }
 .rs-fb { display: flex; flex-direction: column; min-height: 0; }
+.rs-fb-tabs { display: flex; gap: 2px; margin-bottom: 8px; border-bottom: 1px solid var(--rs-border); }
+.rs-fb-tab { flex: 1 1 0; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 6px; border: 0;
+  border-bottom: 2px solid transparent; margin-bottom: -1px; background: none; color: var(--rs-muted); font: inherit; font-size: 12.5px; cursor: pointer; white-space: nowrap; }
+.rs-fb-tab span { overflow: hidden; text-overflow: ellipsis; }
+.rs-fb-tab:hover { color: var(--rs-fg); }
+.rs-fb-tab.active { color: var(--rs-fg); border-bottom-color: var(--rs-accent); font-weight: 600; }
 .rs-fb-bar { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; }
 .rs-fb-crumbs { flex: 1; min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 2px; }
 .rs-fb-crumb { border: 0; background: none; color: var(--rs-muted); font: inherit; font-size: 12.5px; padding: 3px 5px; border-radius: 5px; cursor: pointer; }
@@ -197,10 +203,6 @@ body.rs-no-manager [aria-label="ComfyUI Manager"] { display: none !important; }
 .rs-fb-main:disabled { cursor: default; }
 .rs-fb-icon { font-size: 16px; color: var(--rs-muted); width: 18px; text-align: center; flex: none; }
 .rs-fb-icon.folder { color: #f5b942; }
-.rs-fb-home { width: 100%; padding: 12px 10px; border: 1px solid var(--rs-border); background: color-mix(in srgb, var(--rs-bg2) 45%, transparent);
-  color: inherit; font: inherit; text-align: left; cursor: pointer; margin-bottom: 6px; }
-.rs-fb-home:hover { border-color: var(--rs-accent); }
-.rs-fb-home .rs-fb-icon { font-size: 20px; color: var(--rs-accent); width: 24px; }
 .rs-fb-tools-row { display: none; gap: 3px; padding-right: 6px; }
 .rs-fb-row:hover .rs-fb-tools-row, .rs-fb-row:focus-within .rs-fb-tools-row { display: flex; }
 .rs-fb-empty { color: var(--rs-muted); font-size: 12px; text-align: center; padding: 24px 8px; }

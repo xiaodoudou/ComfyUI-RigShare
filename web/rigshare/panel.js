@@ -240,7 +240,7 @@ export class RigSharePanel {
                     : h("span", { class: "rs-live rs-muted" }, h("i", { class: "pi pi-spin pi-spinner" }), "Joining…"),
                 h("span", { class: "rs-avatars" }, ...here.map((u) => h("span", { class: "rs-avatar rs-avatar-xs", style: `background:${u.color}`, title: u.name }, initials(u.name))))));
             body.push(this.accessLine());
-            if (this.accessOpen && s.room?.manage) body.push(this.accessEditor());
+            if (this.accessOpen && s.room?.manage && s.room.folder) body.push(this.accessEditor(s.room.folder));
             if (!s.canEdit) body.push(h("p", { class: "rs-note" }, h("i", { class: "pi pi-lock" }), c.perms.edit ? "View only in this workflow." : "View only — ask an admin for edit access."));
             if (s.canEdit) {
                 row.append(h("button", {
@@ -269,33 +269,32 @@ export class RigSharePanel {
         await this.run(() => this.sync.movePath(wf.path, dest ? `workflows/${dest}/${base}` : `workflows/${base}`), "Moved: it is live now");
     }
 
+    /** Who can open the workflow on screen: that is decided by its folder. */
     accessLine() {
-        const s = this.sync;
-        const info = s.room;
+        const info = this.sync.room;
         if (!info) return null;
-        const owner = info.owner ? this.client.users.find((u) => u.key === info.owner)?.name ?? `@${info.owner}` : null;
+        const folder = info.folder?.replace(/^shared\//, "");
         return h("div", { class: "rs-access" },
             h("i", { class: `pi ${info.restricted ? "pi-lock" : "pi-globe"}` }),
-            h("span", { class: "rs-grow" }, info.restricted ? "Only people with access" : "Everyone can open it",
-                owner ? h("span", { class: "rs-muted" }, ` · owner ${owner}`) : null),
+            h("span", { class: "rs-grow" }, info.restricted ? `Only people with access to "${folder}"` : "Everyone can open it",
+                folder && !info.restricted ? h("span", { class: "rs-muted" }, ` · in "${folder}"`) : null),
             info.manage ? h("button", {
-                class: `rs-btn rs-btn-sm ${this.accessOpen ? "active" : ""}`,
+                class: `rs-btn rs-btn-sm ${this.accessOpen ? "active" : ""}`, title: `Who can open the folder "${folder}"`,
                 onclick: () => { this.accessOpen = !this.accessOpen; this.accessDraft = null; this.renderBody(); },
-            }, "Access") : null);
+            }, "Folder access") : null);
     }
 
-    accessEditor() {
-        const key = this.sync.targetKey;
+    accessEditor(folder) {
         return this.accessEditorFor({
-            load: () => this.client.request("GET", `/rigshare/api/room/acl?key=${encodeURIComponent(key)}`),
-            save: (restricted, members) => this.sync.setAccess(restricted, members),
-            everyoneHint: "Anyone with an account can open it, with their usual permissions",
+            load: () => this.client.request("GET", `/rigshare/api/workspace/folder?path=${encodeURIComponent(folder)}`),
+            save: (restricted, members) => this.client.request("PATCH", "/rigshare/api/workspace/folders", { path: folder, restricted, members }),
+            everyoneHint: "Anyone with an account can open its workflows, with their usual permissions",
             close: () => { this.accessOpen = false; this.accessDraft = null; this.renderBody(); },
             draftKey: "accessDraft",
         });
     }
 
-    /** Access editor shared by live workflows and shared folders. */
+    /** Access editor for a shared folder (Files tab and the live workflow's folder). */
     accessEditorFor({ load, save, everyoneHint, close, draftKey }) {
         const box = h("div", { class: "rs-access-editor" }, h("p", { class: "rs-muted" }, "Loading…"));
         Promise.all([this.run(load), this.run(() => this.client.request("GET", "/rigshare/api/people"))]).then(([acl, people]) => {

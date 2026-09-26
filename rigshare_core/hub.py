@@ -35,9 +35,6 @@ def clean_text(text, limit):
     return text.strip()[:limit]
 
 
-ROLES = ("view", "edit")
-
-
 def is_live_key(key):
     """Only saved workflows outside a private folder can be live."""
     if not isinstance(key, str) or not key.startswith("file:workflows/"):
@@ -46,14 +43,8 @@ def is_live_key(key):
 
 
 class Room:
-    def __init__(self, key, name, kind, doc, version=0, updated=None, owner=None, acl=None):
+    def __init__(self, key, name, kind, doc, version=0, updated=None):
         self.key = key
-        # Username of whoever first shared it; may manage its access list.
-        self.owner = owner
-        # None: everyone with an account can open it. Otherwise
-        # {"members": {username: "view" | "edit"}}: only those people (plus
-        # the owner and admins). A room role can only narrow account permissions.
-        self.acl = acl
         self.name = name
         self.kind = kind
         self.doc = doc
@@ -66,7 +57,7 @@ class Room:
 
     def to_file(self):
         return {"key": self.key, "name": self.name, "kind": self.kind, "doc": self.doc,
-                "version": self.version, "updated": self.updated, "owner": self.owner, "acl": self.acl}
+                "version": self.version, "updated": self.updated}
 
 
 class Client:
@@ -105,8 +96,7 @@ class Hub:
                 continue
             try:
                 self.rooms[data["key"]] = Room(data["key"], data.get("name") or data["key"], data.get("kind", "file"),
-                                               data.get("doc"), data.get("version", 0), data.get("updated"),
-                                               data.get("owner"), data.get("acl"))
+                                               data.get("doc"), data.get("version", 0), data.get("updated"))
             except (KeyError, TypeError):
                 continue
         self.chat = deque(maxlen=int(store.config.get("chat_history", 200)))
@@ -257,43 +247,34 @@ class Hub:
     def members(self, key):
         return [c for c in self.clients.values() if c.kind and c.room == key]
 
-    # ----- access lists -------------------------------------------------
+    # ----- access ---------------------------------------------------------
 
     def access(self, room, kind, key, perms):
         """What someone may do in a room: None (no access), "view" or "edit".
 
-        A saved workflow's room also follows its folder (private spaces,
-        restricted shared folders): the stricter of the two wins.
+        Access follows the workflow's folder (restricted shared folders), within
+        the person's account permissions.
         """
-        role = self._room_access(room, kind, key, perms)
-        if role and self.workspace and room.key.startswith("file:workflows/"):
-            from .workspace import min_role
-            role = min_role(role, self.workspace.role(room.key[len("file:workflows/"):], kind, key, perms))
-        return role
-
-    @staticmethod
-    def _room_access(room, kind, key, perms):
-        can_edit = bool(perms.get("edit") or perms.get("admin"))
-        if perms.get("admin") or not room.acl:
-            return "edit" if can_edit else "view"
-        if kind == "user" and key == room.owner:
-            return "edit" if can_edit else "view"
-        role = (room.acl.get("members") or {}).get(key) if kind == "user" else None
-        if role not in ROLES:
-            return None
-        return "edit" if role == "edit" and can_edit else "view"
-
-    @staticmethod
-    def can_manage(room, kind, key, perms):
-        return bool(perms.get("admin")) or (kind == "user" and key is not None and key == room.owner)
+        if self.workspace and room.key.startswith("file:workflows/"):
+            return self.workspace.role(room.key[len("file:workflows/"):], kind, key, perms)
+        return "edit" if (perms.get("edit") or perms.get("admin")) else "view"
 
     def client_access(self, room, client):
         return self.access(room, client.kind, client.key, client.perms)
 
+    def folder_of(self, room):
+        """The shared folder ("shared/<name>") a room's file lives in, or None."""
+        area, folder = Workspace.area(room.key[len("file:workflows/"):])
+        return folder if area == "shared" else None
+
+    def folder_restricted(self, folder):
+        return bool(folder and self.workspace and (self.workspace.folders.get(folder) or {}).get("acl"))
+
     def room_info(self, room, client):
-        return {"role": self.client_access(room, client),
-                "manage": self.can_manage(room, client.kind, client.key, client.perms),
-                "restricted": bool(room.acl), "owner": room.owner}
+        folder = self.folder_of(room)
+        manage = bool(folder and self.workspace and self.workspace.can_manage(folder, client.kind, client.key, client.perms))
+        return {"role": self.client_access(room, client), "folder": folder,
+                "restricted": self.folder_restricted(folder), "manage": manage}
 
     def room_list(self, client=None):
         """Live workflows: the rooms someone has open right now."""
@@ -306,7 +287,7 @@ class Hub:
                 out.append({"key": room.key, "name": room.name, "kind": room.kind, "version": room.version,
                             "updated": int(room.updated), "members": members,
                             "nodes": len((room.doc or {}).get("nodes") or []),
-                            "restricted": bool(room.acl), "owner": room.owner})
+                            "restricted": self.folder_restricted(self.folder_of(room))})
         out.sort(key=lambda r: (-len(r["members"]), -r["updated"]))
         return out
 
@@ -329,20 +310,6 @@ class Hub:
                 await self.send(client, {"type": "presence", "users": self.users_for(client),
                                          "rooms": self.room_list(client)})
 
-    async def set_acl(self, room, acl):
-        """Apply a new access list and remove people who lost access."""
-        room.acl = acl
-        room.dirty = True
-        for client in self.members(room.key):
-            role = self.client_access(room, client)
-            if role is None:
-                client.room = None
-                await self.broadcast({"type": "leave", "id": client.id}, room=room.key)
-                await self.send(client, {"type": "room_denied", "room": room.key, "name": room.name})
-            else:
-                await self.send(client, {"type": "room_info", "room": room.key, **self.room_info(room, client)})
-        await self.broadcast_presence()
-
     def rekey_rooms(self, old_prefix, new_prefix):
         """Follow files that moved: rooms of ``file:<old_prefix>...`` get the new path."""
         moved = []
@@ -361,11 +328,9 @@ class Hub:
                 moved.append(room.key)
         return moved
 
-    def path_access(self, path, client, key=None, room=None):
-        """May ``client`` open the workflows path (file or folder)? ``room`` adds its access list."""
+    def path_access(self, path, client, key=None):
+        """May ``client`` open the workflows path (file or folder)?"""
         key = client.key if key is None else key
-        if room is not None and self._room_access(room, client.kind, key, client.perms) is None:
-            return False
         rel = Workspace.workflows_rel(path)
         if rel is None or not self.workspace:
             return True
@@ -373,8 +338,7 @@ class Hub:
 
     def who_sees(self, path):
         """Connected clients that may open ``path``; call before moving it."""
-        room = self.rooms.get("file:" + path)
-        return [c for c in self.clients.values() if c.kind and self.path_access(path, c, room=room)]
+        return [c for c in self.clients.values() if c.kind and self.path_access(path, c)]
 
     async def path_moved(self, old, new, renamed=None, seen_by=None):
         """A workflow file or folder moved (userdata paths, e.g. ``workflows/a.json``).
@@ -384,11 +348,10 @@ class Hub:
         where it went so their open tabs follow too, or that it went somewhere
         they cannot open. ``renamed`` maps usernames changed by the same action.
         """
-        room = self.rooms.get("file:" + old)
         notes = []
         for client in self.who_sees(old) if seen_by is None else seen_by:
             key = (renamed or {}).get(client.key, client.key) if client.kind == "user" else client.key
-            notes.append((client, self.path_access(new, client, key=key, room=room)))
+            notes.append((client, self.path_access(new, client, key=key)))
         self.rekey_rooms("file:" + old, "file:" + new)
         for client, follows in notes:
             await self.send(client, {"type": "path_moved", "from": old, "to": new} if follows
@@ -409,23 +372,6 @@ class Hub:
             else:
                 await self.send(client, {"type": "room_info", "room": room.key, **self.room_info(room, client)})
         await self.broadcast_presence()
-
-    def rename_member(self, old, new):
-        for room in self.rooms.values():
-            changed = False
-            if room.owner == old:
-                room.owner, changed = new, True
-            members = (room.acl or {}).get("members") or {}
-            if old in members:
-                members[new] = members.pop(old)
-                changed = True
-            room.dirty = room.dirty or changed
-
-    def forget_member(self, username):
-        for room in self.rooms.values():
-            members = (room.acl or {}).get("members") or {}
-            if members.pop(username, None) is not None:
-                room.dirty = True
 
     def server_info(self):
         cfg = self.store.config
@@ -516,8 +462,7 @@ class Hub:
                 created = False
                 if room is None:
                     doc = data.get("doc") if isinstance(data.get("doc"), dict) else {}
-                    room = Room(key, clean_text(data.get("name"), 120) or key, "file", doc,
-                                owner=client.key if client.kind == "user" else None)
+                    room = Room(key, clean_text(data.get("name"), 120) or key, "file", doc)
                     room.dirty = True
                     self.rooms[key] = room
                     created = True

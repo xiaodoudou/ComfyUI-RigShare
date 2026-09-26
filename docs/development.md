@@ -15,8 +15,9 @@ node --test "tests/js/*.test.mjs"
 | `tests/python/test_store.py` | Accounts, first-run setup, password hashing, JWT sessions (tampering, `alg: none`, expiry, refresh, revocation), API keys, snapshots |
 | `tests/python/test_graphdoc.py` | Workflow patches, link repair, id renumbering for simultaneous edits, and parity with the JavaScript implementation |
 | `tests/python/test_workspace.py` | Folder rules: path normalisation (double encoding, `../`), private and shared folders, access lists, moves, deletes, browsing |
-| `tests/python/test_server.py` | End to end against a real aiohttp server: login gate, cookies, API keys, permissions, Manager gating, template filtering, live rooms, access lists, folders through ComfyUI's userdata API |
+| `tests/python/test_server.py` | End to end against a real aiohttp server: login gate, cookies, API keys, permissions, Manager gating, template filtering, live rooms, folder access, moves, folders through ComfyUI's userdata API |
 | `tests/js/graphdoc.test.mjs` | The client-side patch logic |
+| `tests/js/files.test.mjs` | Files tabs (My files, Shared, All), start folders, breadcrumbs |
 | `tests/js/sync.test.mjs` | Client diffs, and the regression test for opening a file overwriting the previous tab's shared workflow |
 
 The server tests use a small stand-in for ComfyUI's `/userdata` API (`tests/python/helpers.py`), so they run anywhere Python does. GitHub Actions runs both suites on every push and pull request.

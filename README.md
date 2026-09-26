@@ -52,7 +52,7 @@ What this fork adds over Nexus:
     <td align="center"><img src="docs/images/admin.png" width="260" alt="Admin tab"><br><sub>Accounts and server settings</sub></td>
   </tr>
   <tr>
-    <td align="center"><img src="docs/images/access.png" width="260" alt="Access list of a workflow"><br><sub>Who can open a workflow</sub></td>
+    <td align="center"><img src="docs/images/access.png" width="260" alt="Access list of a shared folder"><br><sub>Who can open a folder</sub></td>
     <td></td>
     <td></td>
   </tr>
@@ -90,7 +90,7 @@ Behind a reverse proxy, turn on WebSocket support, or nothing will be live. See 
 | | |
 |---|---|
 | [Installing](docs/install.md) | Custom node, Docker/compose, first-run setup, upgrading from Nexus |
-| [Sharing workflows](docs/sharing.md) | Live workflows by folder, access lists, snapshots, follow |
+| [Sharing workflows](docs/sharing.md) | Live workflows by folder, folder access, snapshots, follow |
 | [Accounts and permissions](docs/accounts.md) | Edit, Queue, Admin, renaming, what viewers can do |
 | [API access](docs/api.md) | API keys, websockets, trusted IPs, other apps such as Open WebUI |
 | [Settings](docs/settings.md) | Panel settings, ComfyUI settings, every key in `config.json` |
@@ -116,5 +116,5 @@ I run one ComfyUI box for several people. [ComfyUI-Nexus](https://github.com/dax
 - [x] Chat with badge, blink and sound
 - [x] Server monitor with floating widget
 - [x] Conflict-free node ids when two people add nodes at the same instant
-- [x] Per-workflow access lists (share with specific people)
+- [x] Folder access lists (share with specific people)
 - [ ] Publish to the Comfy registry

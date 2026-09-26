@@ -99,19 +99,22 @@ def test_template_filter_and_live_options(run, tmp_path):
     run(scenario())
 
 
-def test_rooms_conflicts_and_access_lists(run):
+def test_rooms_conflicts_and_folder_access(run):
     async def scenario():
         async with rig_server() as rig:
             admin = await rig.setup_admin()
             for name in ("alice", "bob", "carol"):
                 await rig.add_user(name, edit=True)
+            H = rig.headers
+            r = await rig.http.post(rig.url("/rigshare/api/workspace/mkdir"), json={"parent": "@shared", "name": "Team"}, headers=H["alice"])
+            assert r.status == 200
             alice, bob, carol = [await rig.ws(n) for n in ("alice", "bob", "carol")]
-            room = "file:workflows/w.json"
+            room = "file:workflows/shared/Team/w.json"
             await alice.send({"type": "join", "room": room, "name": "w", "doc": BASE_DOC})
             joined = await alice.until("room")
-            assert joined["created"] and joined["manage"]
+            assert joined["created"] and joined["manage"] and joined["folder"] == "shared/Team"
             await bob.send({"type": "join", "room": room, "name": "w", "doc": BASE_DOC})
-            await bob.until("room")
+            assert not (await bob.until("room"))["manage"], "only the folder owner or admins manage access"
             await alice.drain(); await bob.drain()
 
             def add(target_slot):
@@ -126,23 +129,25 @@ def test_rooms_conflicts_and_access_lists(run):
             assert [s["link"] for s in doc["nodes"][1]["inputs"]] == [1, 2]
             assert any(m["type"] == "doc" and m.get("reason") is None for m in await bob.drain()), "quiet resync"
 
-            r = await rig.http.put(rig.url("/rigshare/api/room/acl"), json={"key": room, "restricted": True, "members": {"carol": "view"}}, headers=rig.headers["bob"])
-            assert r.status == 403, "only owner or admin"
-            r = await rig.http.put(rig.url("/rigshare/api/room/acl"), json={"key": room, "restricted": True, "members": {"carol": "view"}}, headers=rig.headers["alice"])
+            # Access follows the folder: restricting it takes out whoever lost access.
+            r = await rig.http.patch(rig.url("/rigshare/api/workspace/folders"), json={"path": "shared/Team", "restricted": True, "members": {"carol": "view"}}, headers=H["bob"])
+            assert r.status == 403, "only the folder owner or an admin"
+            r = await rig.http.patch(rig.url("/rigshare/api/workspace/folders"), json={"path": "shared/Team", "restricted": True, "members": {"carol": "view"}}, headers=H["alice"])
             assert r.status == 200
             msgs = await bob.drain()
             assert any(m["type"] == "room_denied" for m in msgs)
             presence = [m for m in msgs if m["type"] == "presence"][-1]
             assert all(r["key"] != room for r in presence["rooms"])
-            assert (await rig.http.get(rig.url(f"/api/userdata/{enc('workflows/w.json')}"), headers=rig.headers["bob"])).status == 403
+            assert (await alice.until("room_info"))["restricted"] is True
 
             await carol.send({"type": "join", "room": room, "name": "w", "doc": BASE_DOC})
             assert (await carol.until("room"))["role"] == "view"
             await carol.drain()
             await carol.send({"type": "graph", "room": room, "patch": {"nodes": [dict(BASE_DOC["nodes"][0], pos=[9, 9])]}})
             assert "view" in ((await carol.until("doc")).get("reason") or "")
-            r = await rig.http.put(rig.url("/rigshare/api/room/acl"), json={"key": room, "restricted": True, "members": {"carol": "edit"}}, headers=admin)
+            await rig.http.patch(rig.url("/rigshare/api/workspace/folders"), json={"path": "shared/Team", "restricted": True, "members": {"carol": "edit"}}, headers=admin)
             assert (await carol.until("room_info"))["role"] == "edit"
+            assert (await rig.http.put(rig.url("/rigshare/api/room/acl"), json={"key": room}, headers=admin)).status in (404, 405), "no per-workflow lists"
             for s in (alice, bob, carol):
                 await s.close()
     run(scenario())

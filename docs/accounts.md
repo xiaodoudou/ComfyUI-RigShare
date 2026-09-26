@@ -25,7 +25,7 @@ Admins use **Admin → Accounts** in the RigShare panel:
 
 Admins can also toggle Edit, Queue and Manager straight from the **People** tab.
 
-A shared workflow can also be restricted to chosen people, with *Can view* or *Can edit* each. See [Who can open it](sharing.md#who-can-open-it).
+A shared folder can be restricted to chosen people, with *Can view* or *Can edit* each; its workflows follow it. See [Who can open it](sharing.md#who-can-open-it).
 
 The last admin cannot be demoted or deleted.
 

@@ -49,7 +49,6 @@ The panel uses these; they take the same session cookie or API key.
 | `GET /rigshare/api/rooms` | Shared workflows |
 | `GET /rigshare/api/room?key=…` | One room, with its workflow JSON |
 | `GET /rigshare/api/snapshots?room=…` | History of a room |
-| `GET/PUT /rigshare/api/room/acl?key=…` | Who can open a room (owner or admin) |
 | `GET /rigshare/api/people` | Accounts that can be added to an access list |
 | `GET/POST/PATCH/DELETE /rigshare/api/users…` | Accounts (admin) |
 | `GET/PATCH /rigshare/api/config` | Server settings (admin) |
