@@ -28,17 +28,10 @@ jobs:
           publisher = re.search(r'^PublisherId\s*=\s*"([^"]+)"', open("pyproject.toml").read(), re.M).group(1)
           node = re.search(r'^name\s*=\s*"([^"]+)"', open("pyproject.toml").read(), re.M).group(1)
 
-          sections, current = {}, None
-          for line in open("CHANGELOG.md", encoding="utf-8").read().splitlines():
-              m = re.match(r"^## (\d+\.\d+\.\d+)\b", line)
-              if m:
-                  current = m.group(1)
-                  sections[current] = []
-              elif line.startswith("## "):
-                  current = None
-              elif current:
-                  sections[current].append(line)
-          notes = {v: "\n".join(lines).strip() for v, lines in sections.items()}
+          import subprocess
+          # Plain text: the registry shows the changelog as one paragraph.
+          notes = json.loads(subprocess.check_output(
+              [sys.executable, ".github/scripts/registry_changelog.py", "--all"], text=True, encoding="utf-8"))
 
           with urllib.request.urlopen(f"{API}/nodes/{node}/versions") as r:
               published = json.load(r)

@@ -15,15 +15,11 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v7
       - name: Changelog for this version
-        # comfy-cli sends COMFY_NODE_CHANGELOG as the version's changelog
-        # (the registry's Updates section): the matching CHANGELOG.md section.
+        # comfy-cli sends COMFY_NODE_CHANGELOG as the version's changelog (the
+        # registry's Updates section), as plain text: the registry shows one paragraph.
         run: |
           version=$(sed -n 's/^version = "\(.*\)"/\1/p' pyproject.toml | head -n1)
-          notes=$(awk -v v="$version" '
-            $0 ~ "^## " v "( |$)" { on = 1; next }
-            on && /^## / { exit }
-            on { print }
-          ' CHANGELOG.md | sed -e '/./,$!d')
+          notes=$(python3 .github/scripts/registry_changelog.py "$version")
           if [ -z "$notes" ]; then
             echo "::warning::No CHANGELOG.md section for $version"
             exit 0
@@ -31,11 +27,11 @@ jobs:
           delimiter="EOF_$(date +%s%N)"
           {
             echo "COMFY_NODE_CHANGELOG<<$delimiter"
-            printf '%s\n' "$notes"
+            printf '%s
+' "$notes"
             echo "$delimiter"
           } >> "$GITHUB_ENV"
-          echo "Changelog for $version:"
-          printf '%s\n' "$notes"
+          echo "Changelog for $version: $notes"
       - name: Publish Custom Node
         uses: Comfy-Org/publish-node-action@main
         with:
