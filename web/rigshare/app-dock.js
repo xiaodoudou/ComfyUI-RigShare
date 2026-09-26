@@ -33,6 +33,9 @@ export class AppDock {
         }));
         this.dock.style.display = "none";
         document.body.append(this.dock);
+        this.wasApp = false;
+        this.graphTab = null;   // our tab open in the graph view, if any
+        this.restore = null;    // { tabId, until }: reopen it after entering the App view
         setInterval(() => this.update(), 300);
     }
 
@@ -48,11 +51,34 @@ export class AppDock {
 
     update() {
         const active = this.sync.inAppMode;
+        this.keepOpenIntoApp(active);
         const rail = active ? document.querySelector(RAIL) : null;
         if (rail) this.addToRail(rail);
         else this.removeFromRail();
         this.dock.style.display = active && !rail ? "" : "none";
         this.refreshButtons();
+    }
+
+    /**
+     * ComfyUI closes the side panel when a tab enters the App view (not when it
+     * goes back to the graph). If a RigShare tab was open, open it again.
+     */
+    keepOpenIntoApp(inApp) {
+        const open = this.activeTabId;
+        const ours = Object.values(this.views).map((v) => v.tabId);
+        if (!inApp) {
+            this.graphTab = ours.includes(open) ? open : null;
+            this.restore = null;
+        } else if (!this.wasApp && this.graphTab) {
+            this.restore = { tabId: this.graphTab, until: Date.now() + 1500 };
+        }
+        this.wasApp = inApp;
+        if (!this.restore) return;
+        if (open === this.restore.tabId || Date.now() > this.restore.until) {
+            this.restore = null;
+        } else if (open === null) {
+            this.app.extensionManager?.command?.execute(`Workspace.ToggleSidebarTab.${this.restore.tabId}`);
+        }
     }
 
     /** Copy one of ComfyUI's sidebar buttons for each view, placed after its own tabs. */

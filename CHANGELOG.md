@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Entering the App view closed an open RigShare or Files panel (going back to the graph kept it open). It now stays open both ways
+
 ## 1.2.1 (2026-09-26)
 
 ### Changed
