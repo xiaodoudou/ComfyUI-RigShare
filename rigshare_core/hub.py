@@ -103,6 +103,7 @@ class Hub:
         self.chat_dirty = False
         self.stats = None
         self._task = None
+        self.workspace = None  # set by __init__ (folders, private spaces)
 
     # ----- lifecycle ----------------------------------------------------
 
@@ -247,9 +248,20 @@ class Hub:
 
     # ----- access lists -------------------------------------------------
 
+    def access(self, room, kind, key, perms):
+        """What someone may do in a room: None (no access), "view" or "edit".
+
+        A saved workflow's room also follows its folder (private spaces,
+        restricted shared folders): the stricter of the two wins.
+        """
+        role = self._room_access(room, kind, key, perms)
+        if role and self.workspace and room.key.startswith("file:workflows/"):
+            from .workspace import min_role
+            role = min_role(role, self.workspace.role(room.key[len("file:workflows/"):], kind, key, perms))
+        return role
+
     @staticmethod
-    def access(room, kind, key, perms):
-        """What someone may do in a room: None (no access), "view" or "edit"."""
+    def _room_access(room, kind, key, perms):
         can_edit = bool(perms.get("edit") or perms.get("admin"))
         if perms.get("admin") or not room.acl:
             return "edit" if can_edit else "view"
@@ -320,6 +332,37 @@ class Hub:
                 await self.send(client, {"type": "room_info", "room": room.key, **self.room_info(room, client)})
         await self.broadcast_presence()
 
+    def rekey_rooms(self, old_prefix, new_prefix):
+        """Follow files that moved: rooms of ``file:<old_prefix>...`` get the new path."""
+        moved = []
+        for key in list(self.rooms):
+            if key == old_prefix or key.startswith(old_prefix + "/"):
+                room = self.rooms.pop(key)
+                self.store.delete_room(key)
+                room.key = new_prefix + key[len(old_prefix):]
+                room.name = room.key.rsplit("/", 1)[-1].removesuffix(".json")
+                room.dirty = True
+                self.rooms[room.key] = room
+                for client in self.members(key):
+                    client.room = None
+                moved.append(room.key)
+        return moved
+
+    async def refresh_rooms_access(self):
+        """Folder access changed: remove people from rooms they can no longer open."""
+        for client in list(self.clients.values()):
+            room = self.rooms.get(client.room) if client.room else None
+            if not room:
+                continue
+            role = self.client_access(room, client)
+            if role is None:
+                client.room = None
+                await self.broadcast({"type": "leave", "id": client.id}, room=room.key)
+                await self.send(client, {"type": "room_denied", "room": room.key, "name": room.name})
+            else:
+                await self.send(client, {"type": "room_info", "room": room.key, **self.room_info(room, client)})
+        await self.broadcast_presence()
+
     def rename_member(self, old, new):
         for room in self.rooms.values():
             changed = False
@@ -358,7 +401,8 @@ class Hub:
         ws = web.WebSocketResponse(heartbeat=25, max_msg_size=MAX_MESSAGE)
         await ws.prepare(request)
         client = Client(ws)
-        client.cookie_token = request.cookies.get("rigshare_session")
+        auth = request.headers.get("Authorization", "")
+        client.cookie_token = request.cookies.get("rigshare_session") or (auth[7:].strip() if auth.startswith("Bearer ") else None)
         self.clients[client.id] = client
         try:
             async for msg in ws:
@@ -395,6 +439,11 @@ class Hub:
                 await self.send(client, {"type": "denied", "reason": "Please log in.", "login": True})
                 return
             first = not any(c.key == client.key and c is not client for c in self.clients.values())
+            if self.workspace and client.kind == "user":
+                try:
+                    self.workspace.ensure_private(client.key)
+                except OSError:
+                    pass
             await self.send(client, {
                 "type": "welcome",
                 "self": client.public(),

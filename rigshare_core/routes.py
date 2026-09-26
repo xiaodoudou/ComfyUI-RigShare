@@ -12,6 +12,8 @@ from collections import defaultdict
 
 from aiohttp import web
 
+from .workspace import Workspace, norm
+
 log = logging.getLogger("ComfyUI-RigShare")
 
 # (method, path) prefixes that need a permission when api_protection is on.
@@ -22,9 +24,6 @@ PROTECTED = [
     ("POST", "/free", "queue"),
     ("POST", "/upload/", "edit|queue"),
     ("POST", "/api/jobs", "queue"),
-    # Saved workflow files: only admins delete, editors save/overwrite/rename.
-    ("DELETE", "/userdata/workflows/", "admin"),
-    ("POST", "/userdata/workflows/", "edit"),
 ]
 
 # ComfyUI Manager: everything needs the "manager" permission except a few
@@ -293,6 +292,9 @@ def setup(server, store, hub):
             return error(str(e))
         if user["username"] != username:
             hub.rename_member(username, user["username"])
+            if hub.workspace:
+                hub.workspace.rename_user(username, user["username"])
+                hub.rekey_rooms(f"file:workflows/users/{username}", f"file:workflows/users/{user['username']}")
             log.info(f"[RigShare] {admin['username']} renamed @{username} to @{user['username']}")
             await hub.refresh_identities()
         else:
@@ -306,6 +308,8 @@ def setup(server, store, hub):
         try:
             store.delete_user(username)
             hub.forget_member(username)
+            if hub.workspace:
+                hub.workspace.forget_member(username)
         except KeyError:
             return error("No such user", 404)
         except ValueError as e:
@@ -344,6 +348,83 @@ def setup(server, store, hub):
     @routes.get("/rigshare/api/rooms")
     async def list_rooms(request):
         return web.json_response([r for r in hub.room_list() if room_access(request, hub.rooms[r["key"]])])
+
+    # ----- workspace folders ------------------------------------------
+
+    def ws():
+        if not hub.workspace:
+            raise web.HTTPServiceUnavailable(text='{"error": "Workspace unavailable"}', content_type="application/json")
+        return hub.workspace
+
+    @routes.get("/rigshare/api/workspace")
+    async def workspace_tree(request):
+        if not current_user(request):
+            return error("Not logged in", 401)
+        return web.json_response(ws().tree(*who(request)))
+
+    @routes.get("/rigshare/api/workspace/folder")
+    async def folder_acl(request):
+        folder = norm(request.query.get("path"))
+        if Workspace.area(folder)[0] != "shared" or folder.count("/") != 1:
+            return error("Not a shared folder")
+        if not ws().can_manage(folder, *who(request)):
+            return error("Only the folder's owner or an admin can see its access list", 403)
+        meta = ws().folders.get(folder) or {}
+        return web.json_response({"path": folder, "owner": meta.get("owner"), "restricted": bool(meta.get("acl")),
+                                  "members": (meta.get("acl") or {}).get("members") or {}})
+
+    @routes.post("/rigshare/api/workspace/folders")
+    async def create_folder(request):
+        kind, key, perms = who(request)
+        if kind != "user" or not (perms.get("edit") or perms.get("admin")):
+            return error("You need the Edit permission to create shared folders", 403)
+        body = await request.json()
+        try:
+            folder = ws().create_folder(body.get("name"), key)
+        except ValueError as e:
+            return error(str(e))
+        log.info(f"[RigShare] {key} created folder {folder}")
+        return web.json_response({"path": folder})
+
+    @routes.patch("/rigshare/api/workspace/folders")
+    async def update_folder(request):
+        body = await request.json()
+        folder = norm(body.get("path"))
+        if Workspace.area(folder)[0] != "shared" or folder.count("/") != 1:
+            return error("Not a shared folder")
+        if not ws().can_manage(folder, *who(request)):
+            return error("Only the folder's owner or an admin can change it", 403)
+        try:
+            if "restricted" in body:
+                acl = None
+                if body.get("restricted"):
+                    owner = (ws().folders.get(folder) or {}).get("owner")
+                    members = {u: r for u, r in (body.get("members") or {}).items()
+                               if u in store.users and r in ("view", "edit") and u != owner}
+                    acl = {"members": members}
+                kind, key, _ = who(request)
+                ws().set_acl(folder, acl, fallback_owner=key if kind == "user" else None)
+            if body.get("name"):
+                new_folder = ws().rename_folder(folder, body["name"])
+                hub.rekey_rooms(f"file:workflows/{folder}", f"file:workflows/{new_folder}")
+                folder = new_folder
+        except ValueError as e:
+            return error(str(e))
+        await hub.refresh_rooms_access()
+        return web.json_response({"ok": True, "path": folder})
+
+    @routes.delete("/rigshare/api/workspace/folders")
+    async def delete_folder(request):
+        folder = norm(request.query.get("path"))
+        if Workspace.area(folder)[0] != "shared" or folder.count("/") != 1:
+            return error("Not a shared folder")
+        if not ws().can_manage(folder, *who(request)):
+            return error("Only the folder's owner or an admin can delete it", 403)
+        try:
+            ws().delete_folder(folder)
+        except ValueError as e:
+            return error(str(e))
+        return web.json_response({"ok": True})
 
     @routes.get("/rigshare/api/people")
     async def people(request):
@@ -481,6 +562,101 @@ def setup(server, store, hub):
                 continue
         return False
 
+    def parse_userdata(request):
+        """('list'|'get'|'save'|'delete'|'move', path, dest) for ComfyUI userdata calls under workflows/."""
+        raw = request.raw_path.split("?", 1)[0]
+        segs = raw.split("/")
+        if "userdata" not in segs:
+            return None
+        i = segs.index("userdata")
+        if segs[i - 1] not in ("", "api", "v2"):
+            return None
+        if len(segs) == i + 1:  # listing: /userdata?dir=  or /v2/userdata?path=
+            if request.method != "GET":
+                return None
+            directory = norm(request.query.get("dir") or request.query.get("path") or "")
+            return ("list", directory, None) if Workspace.workflows_rel(directory) is not None else None
+        # ComfyUI encodes "/" inside names (one segment each), but accept plain
+        # slashes too so no spelling of a path can slip past the checks.
+        rest = segs[i + 1:]
+        if "move" in rest[1:]:
+            m = rest.index("move", 1)
+            src, dest = norm("/".join(rest[:m])), norm("/".join(rest[m + 1:]))
+        else:
+            src, dest = norm("/".join(rest)), None
+        if Workspace.workflows_rel(src) is None and (dest is None or Workspace.workflows_rel(dest) is None):
+            return None
+        if dest is not None:
+            return ("move", src, dest)
+        action = {"GET": "get", "HEAD": "get", "POST": "save", "DELETE": "delete"}.get(request.method)
+        return (action, src, None) if action else None
+
+    def check_userdata(request, action, src, dest):
+        """Folder rules, then the per-workflow access list of a live room."""
+        kind, key, perms = who(request)
+        w = hub.workspace
+        can_edit = bool(perms.get("edit") or perms.get("admin"))
+
+        def role(path):
+            rel = Workspace.workflows_rel(path)
+            if rel is None:
+                return "edit"
+            folder = w.role(rel, kind, key, perms) if w else ("edit" if can_edit else "view")
+            room = hub.rooms.get("file:" + path)
+            if folder and room and room.acl:
+                from .workspace import min_role
+                folder = min_role(folder, hub.access(room, kind, key, perms))
+            return folder
+
+        def deletable(path):
+            rel = Workspace.workflows_rel(path)
+            if rel is None:
+                return True
+            if w:
+                return w.can_delete(rel, kind, key, perms) and role(path) is not None
+            return bool(perms.get("admin"))
+
+        if action == "list":
+            return None
+        if action == "get":
+            return None if role(src) else "you do not have access to this workflow"
+        if action == "save":
+            return None if role(src) == "edit" else "you cannot save in this folder"
+        if action == "delete":
+            return None if deletable(src) else "only the folder's owner or an admin can delete this"
+        if action == "move":
+            if Workspace.workflows_rel(src) is None or Workspace.workflows_rel(dest) is None:
+                return "workflows cannot be moved in or out of the workflows folder"
+            if role(src) is None or role(dest) != "edit":
+                return "you cannot move this workflow there"
+            if w:
+                ok = w.can_move(Workspace.workflows_rel(src), Workspace.workflows_rel(dest), kind, key, perms)
+            else:
+                ok = role(src) == "edit" and (perms.get("admin") or src.rsplit("/", 1)[0] == dest.rsplit("/", 1)[0])
+            return None if ok else "you cannot move this workflow there"
+        return None
+
+    def filter_listing(request, response, directory):
+        try:
+            items = json.loads(response.body)
+        except Exception:
+            return response
+        if not isinstance(items, list):
+            return response
+        w = hub.workspace
+        kind, key, perms = who(request)
+        base = Workspace.workflows_rel(directory) or ""
+
+        def rel_of(item):
+            p = item.get("path") if isinstance(item, dict) else (item[0] if isinstance(item, list) else item)
+            p = norm(p)
+            if p.startswith("workflows/"):
+                return p[len("workflows/"):]
+            return f"{base}/{p}" if base else p
+
+        kept = [it for it in items if w.visible(rel_of(it), kind, key, perms)]
+        return web.json_response(kept, headers={"Cache-Control": "no-store"})
+
     @web.middleware
     async def protect(request, handler):
         path = request.path
@@ -492,15 +668,11 @@ def setup(server, store, hub):
                     raise web.HTTPFound(f"/rigshare/login?next={path}")
                 return web.json_response({"error": "RigShare: login required. API clients: send "
                                                    "'Authorization: Bearer <api key>'."}, status=401)
-        if path.startswith(("/userdata/workflows/", "/api/userdata/workflows/")) and not trusted(request.remote or ""):
-            # A restricted shared workflow's file follows its access list too.
-            rel = path.split("/userdata/", 1)[1].split("/move/", 1)[0]
-            room = hub.rooms.get("file:" + rel)
-            if room and room.acl:
-                role = room_access(request, room)
-                need = "view" if request.method in ("GET", "HEAD") else "edit"
-                if role is None or (need == "edit" and role != "edit"):
-                    return web.json_response({"error": "RigShare: this workflow is restricted"}, status=403)
+        userdata = parse_userdata(request)
+        if userdata and not trusted(request.remote or ""):
+            refusal = check_userdata(request, *userdata)
+            if refusal:
+                return web.json_response({"error": f"RigShare: {refusal}"}, status=403)
         cfg = store.config.get("api_protection", {})
         if cfg.get("enabled"):
             path = request.path[4:] if request.path.startswith("/api/") else request.path
@@ -521,6 +693,12 @@ def setup(server, store, hub):
                             status=403)
                     break
         response = await handler(request)
+        # Workflow listings only show what this person may open.
+        if userdata and userdata[0] == "list" and not trusted(request.remote or "") and hub.workspace:
+            response = filter_listing(request, response, userdata[1])
+        # A file moved on disk: its live room follows it.
+        if userdata and userdata[0] == "move" and getattr(response, "status", 0) == 200:
+            hub.rekey_rooms("file:" + userdata[1], "file:" + userdata[2])
         # Hide API templates: rewrite the template index ComfyUI serves.
         if (store.config.get("hide_api_templates") and request.method == "GET"
                 and path.startswith("/templates/index") and path.endswith(".json")):

@@ -541,6 +541,29 @@ export class RoomSync extends EventTarget {
         };
     }
 
+    /** Open a saved workflow file (like ComfyUI's workflow browser does). */
+    async openPath(path) {
+        const store = this.store;
+        await store.syncWorkflows?.();
+        const wf = store.getWorkflowByPath?.(path);
+        if (!wf) throw new Error("That workflow no longer exists");
+        if (wf === store.activeWorkflow) return;
+        if (!wf.isLoaded) await wf.load();
+        await this.app.loadGraphData(wf.activeState, true, true, wf);
+    }
+
+    /** Move a saved workflow to another folder (ComfyUI's own rename). */
+    async movePath(path, target) {
+        const store = this.store;
+        await store.syncWorkflows?.();
+        const wf = store.getWorkflowByPath?.(path);
+        if (!wf) throw new Error("That workflow no longer exists");
+        if (store.getWorkflowByPath?.(target)) throw new Error("A workflow with that name already exists there");
+        if (store.renameWorkflow) await store.renameWorkflow(wf, target);
+        else await wf.rename(target);
+        await store.syncWorkflows?.();
+    }
+
     /** Find an already-open tab for a room. */
     findTab(room) {
         for (const wf of this.store?.openWorkflows || []) {

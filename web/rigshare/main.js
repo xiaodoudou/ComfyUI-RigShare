@@ -8,6 +8,7 @@ import { RoomSync } from "./sync.js";
 import { Presence } from "./presence.js";
 import { RigSharePanel } from "./panel.js";
 import { STYLES } from "./styles.js";
+import { installSaveDialog } from "./save-dialog.js";
 
 const TAB_ID = "rigshare";
 const ICON_CLASS = "rigshare-tab-icon";
@@ -241,6 +242,7 @@ app.registerExtension({
         installQueueGuard(client);
         installManagerGuard(client);
         installComfyAccountGuard(client);
+        installSaveDialog(app, api, client);
         presence.install();
 
         app.extensionManager.registerSidebarTab({

@@ -170,6 +170,24 @@ body.rs-no-manager [aria-label="ComfyUI Manager"] { display: none !important; }
 .rs-gpu-name .rs-muted { font-weight: 400; font-size: 11px; }
 .rs-queue-line { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 6px 8px; border-radius: 6px; background: var(--rs-bg2); }
 
+/* files */
+.rs-folder-block + .rs-folder-block { border-top: 1px solid var(--rs-soft); }
+.rs-folder-files { margin-left: 26px; }
+.rs-file .rs-select { max-width: 110px; }
+
+/* save dialog */
+.rs-modal-backdrop { position: fixed; inset: 0; z-index: 3000; background: rgb(0 0 0 / .55); display: grid; place-items: center; padding: 16px; color: var(--rs-fg); font-size: 13px; }
+.rs-modal { width: 100%; max-width: 440px; max-height: 90vh; overflow-y: auto; background: var(--rs-bg); border: 1px solid var(--rs-border);
+  border-radius: 12px; padding: 18px 18px 14px; box-shadow: 0 20px 60px rgb(0 0 0 / .45); display: flex; flex-direction: column; gap: 6px; }
+.rs-modal-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 650; margin-bottom: 6px; }
+.rs-modal-actions { justify-content: flex-end; margin-top: 10px; }
+.rs-save-list { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; margin-bottom: 6px; }
+.rs-save-option { display: flex; align-items: center; gap: 10px; padding: 7px 9px; border: 1px solid var(--rs-border); border-radius: 8px; cursor: pointer; }
+.rs-save-option.on { border-color: var(--rs-accent); background: color-mix(in srgb, var(--rs-accent) 12%, transparent); }
+.rs-save-option input { margin: 0; }
+.rs-error { color: #f87171; font-size: 12px; }
+.rs-error:empty { display: none; }
+
 /* floating server monitor */
 .rs-float { position: fixed; z-index: 1000; width: 240px; background: var(--rs-bg); border: 1px solid var(--rs-border);
   border-radius: 10px; box-shadow: 0 10px 30px rgb(0 0 0 / .35); font-size: 11px; user-select: none; }
