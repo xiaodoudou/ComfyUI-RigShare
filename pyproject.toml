@@ -1,7 +1,7 @@
 [project]
 name = "comfyui-rigshare"
 description = "Turn one ComfyUI server into a shared team workspace. Sign-in with accounts, permissions (edit, queue, Manager, admin) and personal API keys, enforced by the server. A private folder for each person plus shared folders with access lists, with Save asking where. Live co-editing of every shared workflow, with cursors, follow mode and conflict-free merges, in the graph or App view. Per-workflow history with a snapshot on every save, team chat with its whole history, and a CPU, RAM, GPU and queue monitor."
-version = "1.2.1"
+version = "1.2.2"
 license = { file = "LICENSE" }
 dependencies = []
 

@@ -1,19 +1,24 @@
 # Changelog
 
-## Unreleased
+## 1.2.2 (2026-09-26)
+
+A Queue tab showing who launched what, and chat clean-up for admins.
 
 ### Added
 
-- **Queue** tab: what is running and waiting, with the workflow's name and who queued it. Cancel your own runs from there; admins can cancel anyone's. The server enforces it too: cancelling someone else's prompt, or clearing the whole queue, needs *Admin*
-- Panel tabs in a new order: Live, Chat, People, Queue, Server, Admin
+- **Queue** tab: the run in progress and the ones waiting, each with the workflow's name, who queued it and when. Stop or remove your own runs from there; admins can do it for anyone's. The server enforces it too: stopping or removing someone else's prompt, or clearing the whole queue, needs *Admin*
 - Admins can clear the whole chat history (*Admin → Chat*, or `DELETE /rigshare/api/chat`). Everyone's chat empties at once, followed by a notice saying who cleared it
+
+### Changed
+
+- Panel tabs in a new order: Live, Chat, People, Queue, Server, Admin
+- A fuller description on the Comfy Registry
 
 ### Fixed
 
-- The Comfy Registry now shows each version's changelog: the publish workflow sends the matching `CHANGELOG.md` section
-- The registry logo (`icon.png`) was a clipped render with only one rounded corner
-- A fuller registry description
 - Entering the App view closed an open RigShare or Files panel (going back to the graph kept it open). It now stays open both ways
+- The Comfy Registry showed no changelog: the publish workflow now sends the matching `CHANGELOG.md` section
+- The registry logo was a clipped render with only one rounded corner
 
 ## 1.2.1 (2026-09-26)
 

@@ -25,13 +25,14 @@ A custom node that turns a single ComfyUI server into a shared workspace. Everyo
 - lets you switch tabs freely, because only the tab on screen syncs, and keeps open tabs pointed at a workflow when someone renames or moves it
 - shows who is online and which workflow they are on, plus live cursors and selections
 - lets you follow someone, jumping to their tab and view
-- keeps the whole chat history, loading older messages as you scroll up, with an unread badge, a blinking icon and a sound
+- keeps the whole chat history, loading older messages as you scroll up, with an unread badge, a blinking icon and a sound; admins can clear it
+- shows the queue: what is running and waiting, and who launched each run, with a button to stop or remove your own
 - keeps per-workflow history: a snapshot on every save and every few minutes, named snapshots, one-click restore
 - works in ComfyUI's App mode: everyone picks their own graph or App view, App inputs sync live, and you can see who is in which view
 - gives each account permissions to edit, queue, use ComfyUI Manager or administer, enforced by the server and not just hidden in the UI
 - keeps simultaneous edits apart: two people adding or connecting nodes at the same moment both keep their work
 - issues personal API keys, so scripts and other apps can call ComfyUI with their owner's permissions
-- shows CPU, RAM, and for each GPU the load, VRAM, temperature and power, plus the queue, in a panel tab or a floating widget
+- shows CPU, RAM, and for each GPU the load, VRAM, temperature and power, in a panel tab or a floating widget
 - sends execution progress and previews to everyone, not only whoever queued
 
 What this fork adds over Nexus:
@@ -55,9 +56,14 @@ What this fork adds over Nexus:
     <td align="center"><img src="docs/images/access.png" width="260" alt="Access list of a shared folder"><br><sub>Who can open a folder</sub></td>
   </tr>
   <tr>
+    <td align="center"><img src="docs/images/queue.png" width="260" alt="Queue tab"><br><sub>Queue: who launched what</sub></td>
     <td align="center"><img src="docs/images/server.png" width="260" alt="Server tab"><br><sub>Server monitor</sub></td>
     <td align="center"><img src="docs/images/account.png" width="260" alt="Account and API keys"><br><sub>Account and API keys</sub></td>
+  </tr>
+  <tr>
     <td align="center"><img src="docs/images/admin.png" width="260" alt="Admin tab"><br><sub>Accounts and server settings</sub></td>
+    <td></td>
+    <td></td>
   </tr>
 </table>
 
