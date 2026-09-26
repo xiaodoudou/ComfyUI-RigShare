@@ -21,7 +21,7 @@ from aiohttp import web, WSMsgType
 from .chatlog import ChatLog
 from .graphdoc import apply_patch, remap_conflicts
 from .stats import collect_stats
-from .workspace import Workspace
+from .workspace import Workspace, has_app
 
 log = logging.getLogger("ComfyUI-RigShare")
 
@@ -285,7 +285,7 @@ class Hub:
                             "updated": int(room.updated), "members": members,
                             "nodes": len((room.doc or {}).get("nodes") or []),
                             "restricted": self.folder_restricted(self.folder_of(room)),
-                            "app": room.key.endswith(".app.json")})
+                            "app": room.key.endswith(".app.json") or has_app(room.doc)})
         out.sort(key=lambda r: (-len(r["members"]), -r["updated"]))
         return out
 

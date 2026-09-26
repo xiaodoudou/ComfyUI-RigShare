@@ -11,6 +11,7 @@ Paths handled here are relative to the *userdata* root, e.g.
 every path is fully URL-decoded and normalised before it is checked.
 """
 
+import json
 import os
 import posixpath
 import re
@@ -40,6 +41,13 @@ def norm(path):
     return posixpath.normpath("/" + path).lstrip("/") if path else ""
 
 
+def has_app(doc):
+    """A workflow with an App set up (ComfyUI App mode: chosen inputs or outputs)."""
+    data = (doc or {}).get("extra") if isinstance(doc, dict) else None
+    linear = (data or {}).get("linearData") if isinstance(data, dict) else None
+    return isinstance(linear, dict) and bool(linear.get("inputs") or linear.get("outputs"))
+
+
 def min_role(a, b):
     return a if ROLE_RANK[a] <= ROLE_RANK[b] else b
 
@@ -51,6 +59,7 @@ class Workspace:
         self.folders = store._read("folders.json", {})  # "shared/<name>" -> {owner, acl, created}
         os.makedirs(os.path.join(root, "users"), exist_ok=True)
         os.makedirs(os.path.join(root, "shared"), exist_ok=True)
+        self._app_cache = {}  # absolute path -> (mtime, size, has an App)
 
     def save(self):
         self.store._write("folders.json", self.folders)
@@ -191,6 +200,24 @@ class Workspace:
     def _abs(self, rel):
         return os.path.join(self.root, *[p for p in rel.split("/") if p])
 
+    def _file_has_app(self, full):
+        """Read a workflow file only when it changed since the last check."""
+        try:
+            st = os.stat(full)
+        except OSError:
+            return False
+        cached = self._app_cache.get(full)
+        if cached and cached[0] == st.st_mtime and cached[1] == st.st_size:
+            return cached[2]
+        try:
+            with open(full, "r", encoding="utf-8") as f:
+                text = f.read()
+            found = '"linearData"' in text and has_app(json.loads(text))
+        except (OSError, ValueError):
+            found = False
+        self._app_cache[full] = (st.st_mtime, st.st_size, found)
+        return found
+
     def _entry(self, rel, name, is_dir, kind, key, perms):
         full = self._abs(rel)
         is_app = not is_dir and name.endswith(".app.json")  # saved as an App (ComfyUI App mode)
@@ -203,7 +230,7 @@ class Workspace:
             meta = self.folders.get(folder) or {}
             entry.update(owner=meta.get("owner"), restricted=bool(meta.get("acl")),
                          manage=self.can_manage(folder, kind, key, perms))
-        if is_app:
+        if is_app or (not is_dir and self._file_has_app(full)):
             entry["app"] = True
         entry["deletable"] = self.can_delete(rel, kind, key, perms)
         return entry

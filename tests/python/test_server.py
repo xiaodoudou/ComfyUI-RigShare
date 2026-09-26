@@ -390,3 +390,31 @@ def test_listing_inside_a_shared_folder(run):
             assert (await here(bob, "shared/FaceSwap"))["manage"] is False
             assert await here(alice, "users/alice") is None
     run(scenario())
+
+
+def test_workflows_with_an_app_set_up(run):
+    async def scenario():
+        async with rig_server() as rig:
+            await rig.setup_admin()
+            alice = await rig.add_user("alice", edit=True)
+            h = rig.http
+            with_app = json.dumps({"nodes": [], "extra": {"linearData": {"inputs": [[3, "seed"]], "outputs": [9]}}}).encode()
+            empty_app = json.dumps({"nodes": [], "extra": {"linearData": {"inputs": [], "outputs": []}}}).encode()
+            for name, body in (("faceswap.json", with_app), ("empty.json", empty_app), ("plain.json", b"{}")):
+                await h.post(rig.url(f"/api/userdata/{enc('workflows/users/alice/' + name)}"), data=body, headers=alice)
+
+            async def apps():
+                listing = await (await h.get(rig.url("/rigshare/api/workspace/list?path=users/alice"), headers=alice)).json()
+                return {e["name"] for e in listing["entries"] if e.get("app")}
+            assert await apps() == {"faceswap"}, "only a workflow whose App has inputs or outputs"
+            # Edited on disk: the cached answer follows the file.
+            await h.post(rig.url(f"/api/userdata/{enc('workflows/users/alice/faceswap.json')}"), data=b'{"nodes": []}', headers=alice)
+            assert await apps() == set()
+
+            sock = await rig.ws("alice")
+            await sock.send({"type": "join", "room": "file:workflows/shared/f.json", "name": "f", "doc": json.loads(with_app)})
+            await sock.until("room")
+            presence = [m for m in await sock.drain() if m["type"] == "presence"][-1]
+            assert presence["rooms"][0]["app"] is True
+            await sock.close()
+    run(scenario())

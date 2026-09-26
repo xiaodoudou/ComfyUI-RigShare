@@ -204,7 +204,7 @@ body.rs-no-manager [aria-label="ComfyUI Manager"] { display: none !important; }
 .rs-fb-main { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 7px 8px; border: 0; background: none;
   color: inherit; font: inherit; text-align: left; cursor: pointer; }
 .rs-fb-main:disabled { cursor: default; }
-.rs-fb-icon { font-size: 16px; color: var(--rs-muted); width: 18px; text-align: center; flex: none; }
+.rs-fb-icon { font-size: 13px; color: var(--rs-muted); width: 15px; text-align: center; flex: none; }
 .rs-fb-icon.folder { color: #f5b942; }
 .rs-fb-tools-row { display: none; gap: 3px; padding-right: 6px; }
 .rs-fb-row:hover .rs-fb-tools-row, .rs-fb-row:focus-within .rs-fb-tools-row { display: flex; }
