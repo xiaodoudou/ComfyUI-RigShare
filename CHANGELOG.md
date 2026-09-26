@@ -8,6 +8,9 @@
 
 ### Fixed
 
+- The Comfy Registry now shows each version's changelog: the publish workflow sends the matching `CHANGELOG.md` section
+- The registry logo (`icon.png`) was a clipped render with only one rounded corner
+- A fuller registry description
 - Entering the App view closed an open RigShare or Files panel (going back to the graph kept it open). It now stays open both ways
 
 ## 1.2.1 (2026-09-26)
