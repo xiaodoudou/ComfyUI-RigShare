@@ -27,8 +27,7 @@ jobs:
           delimiter="EOF_$(date +%s%N)"
           {
             echo "COMFY_NODE_CHANGELOG<<$delimiter"
-            printf '%s
-' "$notes"
+            echo "$notes"
             echo "$delimiter"
           } >> "$GITHUB_ENV"
           echo "Changelog for $version: $notes"
