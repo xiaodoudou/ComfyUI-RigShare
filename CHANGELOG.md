@@ -16,6 +16,10 @@
 - Other plugins' top-bar buttons (rgthree-comfy, Crystools...) are hidden without the *Manager* permission, like ComfyUI Manager's. Their settings kept on the server, which apply to everyone, need *Manager* too
 - Pixaroma's Workflows panel is hidden along with ComfyUI's Workflows and Apps tabs (admin setting now called *Hide other workflow browsers*), and its shortcut opens Files. Its server routes are refused to everyone but admins: they read the workflows folder straight from disk, private folders included
 
+### Fixed
+
+- Deleting a workflow (or a folder) from the Files tab now closes its open tabs; before, the tab stayed open as an orphan
+
 ## 1.2.3 (2026-09-27)
 
 ### Fixed
