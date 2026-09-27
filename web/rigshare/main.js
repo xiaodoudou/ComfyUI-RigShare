@@ -104,6 +104,48 @@ function installManagerGuard(client) {
     setInterval(tagPluginButtons, 1000);
 }
 
+// ComfyUI Manager in its own sidebar tab (admin option): its menu and the custom
+// nodes manager open from there, and the top-bar button goes away.
+const MANAGER_TAB_ID = "rigshare-manager";
+function installManagerTab(client) {
+    let registered = false;
+    const run = (id) => app.extensionManager?.command?.execute(id);
+    const panel = h("div", { class: "rs-panel rs-manager-panel" },
+        h("div", { class: "rs-header" },
+            h("div", { class: "rs-title" }, h("i", { class: "pi pi-th-large rs-files-logo" }),
+                h("div", { class: "rs-title-text" }, h("div", { class: "rs-title-name" }, "ComfyUI Manager"),
+                    h("div", { class: "rs-status" }, "Custom nodes, models, updates")))),
+        h("div", { class: "rs-body" },
+            h("section", { class: "rs-section" },
+                h("button", { class: "rs-btn rs-btn-primary rs-block-btn", onclick: () => run("Comfy.Manager.Menu.ToggleVisibility") },
+                    h("i", { class: "pi pi-th-large" }), "Open Manager"),
+                h("p", { class: "rs-muted rs-small" }, "Install missing nodes, update everything, the model manager, snapshots and restart."),
+                h("button", { class: "rs-btn rs-block-btn", onclick: () => run("Comfy.Manager.CustomNodesManager.ToggleVisibility") },
+                    h("i", { class: "pi pi-server" }), "Custom Nodes Manager"),
+                h("p", { class: "rs-muted rs-small" }, "Browse, install, update, disable or remove custom nodes."))));
+    const apply = () => {
+        const manager = app.extensionManager;
+        const hasManager = (manager?.command?.commands ?? []).some((c) => c.id === "Comfy.Manager.Menu.ToggleVisibility");
+        const want = !!client.server?.manager_tab && client.online && !!client.perms.manager && hasManager;
+        document.body.classList.toggle("rs-manager-tab", !!client.server?.manager_tab);
+        if (want && !registered) {
+            manager.registerSidebarTab({
+                id: MANAGER_TAB_ID, icon: "pi pi-th-large", title: "Manager", tooltip: "ComfyUI Manager",
+                label: "Manager", type: "custom",
+                render: (el) => { el.classList.add("rs-host"); el.replaceChildren(panel); },
+            });
+            registered = true;
+        } else if (!want && registered) {
+            (manager.unregisterSidebarTab ?? manager.sidebarTab?.unregisterSidebarTab)?.(MANAGER_TAB_ID);
+            registered = false;
+        }
+    };
+    client.on("server", apply);
+    client.on("self", apply);
+    client.on("status", apply);
+    setTimeout(apply, 2500); // Manager registers its commands during setup
+}
+
 // Comfy.org account: hide the top-bar sign-in button and refuse the sign-in
 // dialogs when the admin turned it off.
 const SIGNIN_DIALOGS = ["global-signin", "api-nodes-signin"];
@@ -330,6 +372,7 @@ app.registerExtension({
         installManagerGuard(client);
         installComfyAccountGuard(client);
         installFileTabsGuard(client);
+        installManagerTab(client);
         installSaveDialog(app, api, client, sync);
         presence.install();
 

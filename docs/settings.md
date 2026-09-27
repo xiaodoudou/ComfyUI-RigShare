@@ -28,6 +28,7 @@ Admins change these under **Admin → Server settings**. They are stored in `rig
 | `broadcast_execution` | `true` | Send progress and previews to everyone, not only whoever queued |
 | `hide_comfy_account` | `false` | Hide ComfyUI's Comfy.org sign-in button and dialog |
 | `hide_comfy_file_tabs` | `true` | Hide other workflow browsers: ComfyUI's Workflows and Apps sidebar tabs and Pixaroma's Workflows panel. RigShare's Files tab replaces them and their shortcuts open it |
+| `manager_tab` | `false` | Show ComfyUI Manager as a Manager tab in the left sidebar instead of a top-bar button (only for accounts with *Manager*) |
 | `hide_api_templates` | `false` | Remove templates that need paid API nodes from the template browser |
 | `api_protection.enabled` | `true` | Server-side checks on queue, interrupt, free and upload calls |
 | `api_protection.trusted_ips` | `["127.0.0.1", "::1"]` | Addresses or networks that skip login and checks |

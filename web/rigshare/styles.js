@@ -111,6 +111,10 @@ body.rs-hide-comfy-account [data-testid="login-button-popover"] { display: none 
 body.rs-no-manager .rs-plugin-bar { display: none !important; }
 /* Pixaroma's workflow browser button: RigShare's Files tab replaces it */
 body.rs-hide-file-browsers .pixwb-group-btn { display: none !important; }
+/* ComfyUI Manager moved to its own sidebar tab (admin option): no top-bar button */
+body.rs-manager-tab .comfyui-button-group:has(> [title="ComfyUI Manager"]),
+body.rs-manager-tab [title="ComfyUI Manager"] { display: none !important; }
+.rs-block-btn { width: 100%; justify-content: center; padding: 9px 12px; margin-top: 4px; }
 /* ComfyUI Manager hidden for accounts without the "manager" permission */
 body.rs-no-manager .comfyui-button-group:has(> [title="ComfyUI Manager"]),
 body.rs-no-manager [title="ComfyUI Manager"],

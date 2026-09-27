@@ -417,6 +417,7 @@ class Hub:
         return {"name": cfg.get("server_name"), "allow_guests": cfg.get("allow_guests"),
                 "hide_comfy_account": bool(cfg.get("hide_comfy_account")),
                 "hide_comfy_file_tabs": bool(cfg.get("hide_comfy_file_tabs", True)),
+                "manager_tab": bool(cfg.get("manager_tab")),
                 "hide_api_templates": bool(cfg.get("hide_api_templates"))}
 
     async def broadcast_server(self):

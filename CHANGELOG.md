@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- Admin option *ComfyUI Manager in its own sidebar tab*: a **Manager** tab in the left bar (Open Manager, Custom Nodes Manager) replaces the top-bar button, for accounts with the *Manager* permission
+
 ### Changed
 
 - Other plugins' top-bar buttons (rgthree-comfy, Crystools...) are hidden without the *Manager* permission, like ComfyUI Manager's. Their settings kept on the server, which apply to everyone, need *Manager* too

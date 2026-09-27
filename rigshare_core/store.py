@@ -49,6 +49,8 @@ DEFAULT_CONFIG = {
     "hide_comfy_account": False,
     # ComfyUI's own Workflows and Apps sidebar tabs duplicate RigShare's Files tab.
     "hide_comfy_file_tabs": True,
+    # ComfyUI Manager in its own sidebar tab instead of the top-bar button.
+    "manager_tab": False,
     # Remove templates that need paid API nodes from the template browser.
     "hide_api_templates": False,
     # Rooms nobody opened for this many days are forgotten.

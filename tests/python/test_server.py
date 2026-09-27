@@ -579,3 +579,16 @@ def test_other_plugins_server_routes(run):
             assert await status("GET", "/pixaroma/api/workflows/index", admin) == 200
             assert await status("GET", "/pixaroma/api/fonts/list", alice) == 200, "the rest of Pixaroma works"
     run(scenario())
+
+
+def test_manager_tab_option(run):
+    async def scenario():
+        async with rig_server() as rig:
+            admin = await rig.setup_admin()
+            sock = await rig.ws("boss")
+            assert rig.hub.server_info()["manager_tab"] is False, "off by default"
+            r = await rig.http.patch(rig.url("/rigshare/api/config"), json={"manager_tab": True}, headers=admin)
+            assert r.status == 200
+            assert (await sock.until("server"))["server"]["manager_tab"] is True
+            await sock.close()
+    run(scenario())
