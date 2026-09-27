@@ -4,10 +4,13 @@
 
 ### Added
 
+- Floating server monitor: a magnet docks it in the bottom-right corner and keeps it there, beside the minimap in the graph, in the corner of the App view. Dragging it undocks it
+- Floating server monitor: **Unload models** and **Free models & cache** buttons for admins, like ComfyUI Manager's
 - Admin option *ComfyUI Manager in its own sidebar tab*: a **Manager** tab in the left bar (Open Manager, Custom Nodes Manager) replaces the top-bar button, for accounts with the *Manager* permission
 
 ### Changed
 
+- Freeing models and cache (ComfyUI's `/free`) needs *Admin* instead of *Queue*: it affects everyone's runs
 - Other plugins' top-bar buttons (rgthree-comfy, Crystools...) are hidden without the *Manager* permission, like ComfyUI Manager's. Their settings kept on the server, which apply to everyone, need *Manager* too
 - Pixaroma's Workflows panel is hidden along with ComfyUI's Workflows and Apps tabs (admin setting now called *Hide other workflow browsers*), and its shortcut opens Files. Its server routes are refused to everyone but admins: they read the workflows folder straight from disk, private folders included
 

@@ -122,6 +122,7 @@ def comfy_routes(user_root, queue=None):
         table.route("*", prefix + "/prompt")(prompt)
         table.post(prefix + "/queue")(queue_route)
         table.post(prefix + "/interrupt")(ok)
+        table.post(prefix + "/free")(ok)
         table.route("*", prefix + "/manager/{tail:.*}")(ok)
         table.route("*", prefix + "/customnode/{tail:.*}")(ok)
     return table

@@ -244,6 +244,10 @@ body.rs-no-manager [aria-label="ComfyUI Manager"] { display: none !important; }
 .rs-float-head:active { cursor: grabbing; }
 .rs-float-close { border: 0; background: none; color: var(--rs-muted); cursor: pointer; padding: 2px; }
 .rs-float-close:hover { color: var(--rs-fg); }
+.rs-float-magnet { display: grid; place-items: center; border-radius: 4px; }
+.rs-float-magnet.active { color: var(--rs-accent); }
+.rs-float-actions { display: flex; gap: 4px; padding: 0 8px 8px; flex-wrap: wrap; }
+.rs-float-actions .rs-btn { flex: 1; justify-content: center; font-size: 11px; padding: 3px 6px; }
 .rs-float-body { padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 4px; }
 .rs-mini { display: grid; grid-template-columns: 46px 1fr 62px; align-items: center; gap: 6px; }
 .rs-mini-label { color: var(--rs-muted); }

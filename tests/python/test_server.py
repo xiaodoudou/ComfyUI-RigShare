@@ -592,3 +592,14 @@ def test_manager_tab_option(run):
             assert (await sock.until("server"))["server"]["manager_tab"] is True
             await sock.close()
     run(scenario())
+
+
+def test_freeing_memory_is_admin_only(run):
+    async def scenario():
+        async with rig_server() as rig:
+            admin = await rig.setup_admin()
+            queuer = await rig.add_user("queuer", queue=True, manager=True)
+            body = {"unload_models": True, "free_memory": True}
+            assert (await rig.http.post(rig.url("/api/free"), json=body, headers=queuer)).status == 403, "affects everyone's runs"
+            assert (await rig.http.post(rig.url("/api/free"), json=body, headers=admin)).status == 200
+    run(scenario())

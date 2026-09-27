@@ -38,7 +38,7 @@ export class RigSharePanel {
         this.historyOpen = false;
         this.newKey = null;
 
-        this.widget = new ServerWidget(client, () => this.render());
+        this.widget = new ServerWidget(client, () => this.render(), { inAppMode: () => sync.inAppMode });
 
         this.header = h("div", { class: "rs-header" });
         this.nav = h("div", { class: "rs-nav", role: "tablist" });

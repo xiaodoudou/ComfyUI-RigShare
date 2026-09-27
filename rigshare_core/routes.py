@@ -49,7 +49,7 @@ PROTECTED = [
     ("POST", "/prompt", "queue"),
     ("POST", "/queue", "queue"),
     ("POST", "/interrupt", "queue"),
-    ("POST", "/free", "queue"),
+    ("POST", "/free", "admin"),  # unloading models affects everyone's runs
     ("POST", "/upload/", "edit|queue"),
     ("POST", "/api/jobs", "queue"),
 ]
