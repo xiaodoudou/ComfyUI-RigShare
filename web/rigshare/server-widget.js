@@ -104,13 +104,29 @@ export class ServerWidget {
             const area = box("#linearCenterPanel") ?? { right: window.innerWidth, bottom: window.innerHeight };
             return { x: area.right - w - GAP, y: area.bottom - hgt - GAP };
         }
+        // ComfyUI's bottom-right group: the minimap above the zoom toolbar. Sit to
+        // their left, bottom-aligned with the toolbar, with the gap ComfyUI uses.
         const minimap = box('[data-testid="minimap-container"]');
-        if (minimap) return { x: minimap.left - w - GAP, y: minimap.bottom - hgt };
-        // No minimap: the canvas corner, above ComfyUI's zoom controls.
+        const toolbar = this.toolbarBox();
+        if (minimap || toolbar) {
+            const left = Math.min(minimap?.left ?? Infinity, toolbar?.left ?? Infinity);
+            const bottom = toolbar?.bottom ?? minimap.bottom;
+            const gap = minimap && toolbar ? Math.max(4, Math.round(toolbar.top - minimap.bottom)) : GAP;
+            return { x: left - w - gap, y: bottom - hgt };
+        }
         const canvas = box("#graph-canvas-container") ?? box("#graph-canvas") ?? { right: window.innerWidth, bottom: window.innerHeight };
-        const controls = box('[data-testid="toggle-minimap-button"]');
-        const bottom = controls ? Math.min(canvas.bottom, controls.top) : canvas.bottom;
-        return { x: canvas.right - w - GAP, y: bottom - hgt - GAP };
+        return { x: canvas.right - w - GAP, y: canvas.bottom - hgt - GAP };
+    }
+
+    /** The zoom toolbar holding the minimap toggle: the button's first ancestor wide enough to be the bar. */
+    toolbarBox() {
+        let el = document.querySelector('[data-testid="toggle-minimap-button"]');
+        while (el && el !== document.body) {
+            const r = el.getBoundingClientRect();
+            if (r.width >= 120 && r.height > 0 && r.height < 120) return r;
+            el = el.parentElement;
+        }
+        return null;
     }
 
     dock() {
