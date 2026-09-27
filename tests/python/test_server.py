@@ -522,3 +522,27 @@ def test_ended_session_goes_back_to_login(run, tmp_path):
             r = await h.get(rig.url("/"), headers={"Accept": "text/html"}, allow_redirects=False)
             assert r.status == 302 and r.headers["Location"].startswith("/rigshare/login")
     run(scenario())
+
+
+def test_file_changes_reach_who_can_see_them(run):
+    async def scenario():
+        async with rig_server() as rig:
+            await rig.setup_admin()
+            alice = await rig.add_user("alice", edit=True)
+            await rig.add_user("bob", edit=True)
+            a, b = await rig.ws("alice"), await rig.ws("bob")
+            h = rig.http
+
+            async def changed(sock):
+                return any(m["type"] == "files_changed" for m in await sock.drain())
+
+            await h.post(rig.url(f"/api/userdata/{enc('workflows/users/alice/mine.json')}"), data=b'{"nodes": []}', headers=alice)
+            assert await changed(a) and not await changed(b), "a private save only tells its owner"
+            await h.post(rig.url(f"/api/userdata/{enc('workflows/shared/team.json')}"), data=b'{"nodes": []}', headers=alice)
+            assert await changed(a) and await changed(b)
+            await h.post(rig.url("/rigshare/api/workspace/mkdir"), json={"parent": "@shared", "name": "Crew"}, headers=alice)
+            assert await changed(b), "new shared folder"
+            await h.post(rig.url(f"/api/userdata/{enc('workflows/shared/team.json')}/move/{enc('workflows/shared/Crew/team.json')}"), headers=rig.headers["boss"])
+            assert await changed(b), "moves"
+            await a.close(); await b.close()
+    run(scenario())

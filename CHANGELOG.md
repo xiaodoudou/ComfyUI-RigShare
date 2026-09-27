@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- The Files tab didn't show a workflow you had just saved into the folder on screen until you left the folder and came back. It now refreshes whenever workflows are saved, moved, renamed or deleted, or folders change, including by other people (each person is only told about folders they can open)
 - When the session had ended (logged out elsewhere, expired, cookie cleared), a ComfyUI page already open or restored from the browser cache showed "API key missing" errors instead of going back to the login screen. The page is no longer cached, and it returns to the login screen as soon as a request says login is required
 
 ## 1.2.2 (2026-09-26)

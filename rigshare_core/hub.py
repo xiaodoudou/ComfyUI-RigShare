@@ -13,6 +13,7 @@ import asyncio
 import hashlib
 import json
 import logging
+import posixpath
 import secrets
 import time
 from collections import OrderedDict
@@ -365,6 +366,14 @@ class Hub:
             return True
         return self.workspace.role(rel, client.kind, key, client.perms) is not None
 
+    async def files_changed(self, *paths):
+        """Workflow files changed in these folders (userdata paths): tell whoever can
+        open one of them, so their Files tab reloads."""
+        folders = {posixpath.dirname(p) if p.endswith(".json") else p for p in paths if p}
+        for client in list(self.clients.values()):
+            if client.kind and any(self.path_access(f, client) for f in folders):
+                await self.send(client, {"type": "files_changed"})
+
     def who_sees(self, path):
         """Connected clients that may open ``path``; call before moving it."""
         return [c for c in self.clients.values() if c.kind and self.path_access(path, c)]
@@ -382,6 +391,7 @@ class Hub:
             key = (renamed or {}).get(client.key, client.key) if client.kind == "user" else client.key
             notes.append((client, self.path_access(new, client, key=key)))
         self.rekey_rooms("file:" + old, "file:" + new)
+        await self.files_changed(posixpath.dirname(old), posixpath.dirname(new), new)
         for client, follows in notes:
             await self.send(client, {"type": "path_moved", "from": old, "to": new} if follows
                             else {"type": "path_closed", "from": old})

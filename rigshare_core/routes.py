@@ -7,6 +7,7 @@ import ipaddress
 import json
 import logging
 import os
+import posixpath
 import time
 from urllib.parse import unquote
 from collections import defaultdict
@@ -417,7 +418,10 @@ def setup(server, store, hub):
     async def ws_mkdir(request):
         body = await request.json()
         err, path = ws_call(lambda: ws().make_dir(body.get("parent", ""), body.get("name"), *who(request)))
-        return err or web.json_response({"path": path})
+        if err:
+            return err
+        await hub.files_changed("workflows/" + posixpath.dirname(path))
+        return web.json_response({"path": path})
 
     @routes.post("/rigshare/api/workspace/rename-folder")
     async def ws_rename_dir(request):
@@ -449,6 +453,7 @@ def setup(server, store, hub):
         if err:
             return err
         await hub.drop_rooms("file:workflows/" + path, display(request))
+        await hub.files_changed("workflows/" + posixpath.dirname(path))
         return web.json_response({"ok": True})
 
     @routes.get("/rigshare/api/workspace/folder")
@@ -473,6 +478,7 @@ def setup(server, store, hub):
         except ValueError as e:
             return error(str(e))
         log.info(f"[RigShare] {key} created folder {folder}")
+        await hub.files_changed("workflows/shared")
         return web.json_response({"path": folder})
 
     @routes.patch("/rigshare/api/workspace/folders")
@@ -501,6 +507,7 @@ def setup(server, store, hub):
         except ValueError as e:
             return error(str(e))
         await hub.refresh_rooms_access()
+        await hub.files_changed("workflows/shared")  # the folder's access changed who sees it
         return web.json_response({"ok": True, "path": folder})
 
     @routes.delete("/rigshare/api/workspace/folders")
@@ -807,6 +814,7 @@ def setup(server, store, hub):
         # Every save of a workflow keeps a snapshot, named after when it was saved.
         if userdata and userdata[0] == "save" and getattr(response, "status", 0) == 200:
             snapshot_saved_file(request, userdata[1], await request.read())
+            await hub.files_changed(userdata[1])
         # Workflow listings only show what this person may open.
         if userdata and userdata[0] == "list" and not trusted(request.remote or "") and hub.workspace:
             response = filter_listing(request, response, userdata[1])
@@ -815,6 +823,7 @@ def setup(server, store, hub):
             await hub.path_moved(userdata[1], userdata[2])
         if userdata and userdata[0] == "delete" and getattr(response, "status", 0) in (200, 204):
             await hub.drop_rooms("file:" + userdata[1], display(request))
+            await hub.files_changed(userdata[1])
         # Hide API templates: rewrite the template index ComfyUI serves.
         if (store.config.get("hide_api_templates") and request.method == "GET"
                 and path.startswith("/templates/index") and path.endswith(".json")):

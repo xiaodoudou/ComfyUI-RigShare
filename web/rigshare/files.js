@@ -35,7 +35,14 @@ export class FilesBrowser {
             h("div", { class: "rs-fb-tools" }, this.search),
             this.list);
         // The sidebar browser lives as long as the page: keep its live dots current.
-        if (mode === "browse") client.on("presence", () => { if (this.listing && this.el.isConnected) this.renderList(); });
+        if (mode === "browse") {
+            client.on("presence", () => { if (this.listing && this.el.isConnected) this.renderList(); });
+            // Someone (maybe you, from the Save dialog) saved, moved or deleted a workflow: reload.
+            client.on("files_changed", () => {
+                clearTimeout(this.changedTimer);
+                this.changedTimer = setTimeout(() => { if (this.el.isConnected && !this.accessFor) this.reload(); }, 250);
+            });
+        }
         this.setStart(start);
     }
 
