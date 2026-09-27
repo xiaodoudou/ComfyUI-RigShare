@@ -141,6 +141,7 @@ export class RoomSync extends EventTarget {
         });
         client.on("room_closed", (msg) => {
             // The file was deleted: the tab stays open as a private copy.
+            if (this.denied.has(msg.room) && !this.findTab({ key: msg.room })) return; // we deleted it and closed the tab
             this.denied.add(msg.room);
             if (msg.room === this.targetKey) {
                 this.ready = false;
@@ -522,6 +523,27 @@ export class RoomSync extends EventTarget {
     tabsUnder(path) {
         return (this.store?.openWorkflows || []).filter((wf) =>
             !wf.isTemporary && (wf.path === path || wf.path?.startsWith(path + "/")));
+    }
+
+    /**
+     * We are deleting a file (or folder): close its tabs first, without the
+     * "unsaved changes" prompt (the user already confirmed the delete). The
+     * active tab goes through ComfyUI's own close, which opens the next tab.
+     */
+    async closeTabsUnder(path) {
+        const store = this.store;
+        const tabs = this.tabsUnder(path);
+        if (!tabs.length) return;
+        for (const wf of tabs) {
+            this.denied.add(`file:${wf.path}`); // our own delete: no "private copy" notice
+            if (wf === store.activeWorkflow) continue;
+            store.closeWorkflow?.(wf);
+        }
+        const active = store.activeWorkflow;
+        if (active && tabs.includes(active)) {
+            active.isModified = false;
+            await this.app.extensionManager?.command?.execute("Workspace.CloseWorkflow");
+        }
     }
 
     /**

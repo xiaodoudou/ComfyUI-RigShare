@@ -128,3 +128,37 @@ test("a file renamed by someone else re-points the open tab and rejoins its room
     sync.tick();
     assert.equal(sent.at(-1).room, null, "moved out of reach: the tab leaves the room");
 });
+
+test("deleting a folder closes its tabs, the active one through ComfyUI's close", async () => {
+    const a = { path: "workflows/team/a.json", isTemporary: false, isModified: true };
+    const b = { path: "workflows/team/sub/b.json", isTemporary: false };
+    const other = { path: "workflows/other.json", isTemporary: false };
+    const store = {
+        activeWorkflow: a, openWorkflows: [a, b, other],
+        closeWorkflow(wf) { this.openWorkflows = this.openWorkflows.filter((w) => w !== wf); },
+    };
+    const commands = [];
+    const client = Object.assign(new EventTarget(), {
+        online: true, perms: { edit: true }, rooms: [], users: [],
+        on(type, fn) { this.addEventListener(type, (e) => fn(e.detail)); },
+        emit(type, detail) { this.dispatchEvent(new CustomEvent(type, { detail })); },
+        send() { return true; },
+    });
+    const app = {
+        extensionManager: { workflow: store, command: { async execute(id) {
+            commands.push([id, store.activeWorkflow.isModified]);
+            store.closeWorkflow(store.activeWorkflow);
+            store.activeWorkflow = store.openWorkflows[0];
+        } } },
+        canvas: null, loadGraphData: async () => {},
+        rootGraph: { serialize: () => ({ nodes: [], links: [], extra: {} }), extra: {}, getNodeById: () => null },
+    };
+    const sync = new RoomSync(app, new EventTarget(), client);
+    const toasts = [];
+    client.on("toast", (t) => toasts.push(t));
+    await sync.closeTabsUnder("workflows/team");
+    assert.deepEqual(store.openWorkflows, [other]);
+    assert.deepEqual(commands, [["Workspace.CloseWorkflow", false]], "no unsaved-changes prompt");
+    client.emit("room_closed", { room: "file:workflows/team/a.json", name: "a" });
+    assert.equal(toasts.length, 0, "our own delete: no private-copy notice");
+});

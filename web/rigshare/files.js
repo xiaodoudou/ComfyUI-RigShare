@@ -310,10 +310,15 @@ export class FilesBrowser {
     async remove(e) {
         const what = e.type === "folder" ? `the folder "${e.name}"` : `"${e.name}"`;
         if (!(await this.confirm("Delete", `Delete ${what}? This cannot be undone.`))) return;
+        // Its open tabs close first (ComfyUI would otherwise keep them as orphans).
+        const path = `workflows/${e.path}`;
+        const closing = this.sync.tabsUnder(path).map((wf) => `file:${wf.path}`);
+        await this.sync.closeTabsUnder(path);
+        let done;
         if (e.type === "folder") {
-            await this.run(() => this.client.request("POST", "/rigshare/api/workspace/delete-folder", { path: e.path }), "Deleted");
+            done = await this.run(() => this.client.request("POST", "/rigshare/api/workspace/delete-folder", { path: e.path }), "Deleted");
         } else {
-            await this.run(async () => {
+            done = await this.run(async () => {
                 const store = this.app.extensionManager.workflow;
                 await store.syncWorkflows?.();
                 const wf = store.getWorkflowByPath?.(`workflows/${e.path}`);
@@ -325,6 +330,7 @@ export class FilesBrowser {
                 }
             }, "Deleted");
         }
+        if (!done) for (const key of closing) this.sync.denied.delete(key); // still there: reopening it rejoins
         await this.refreshComfy();
         this.reload();
     }
