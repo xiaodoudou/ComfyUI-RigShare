@@ -877,6 +877,8 @@ def setup(server, store, hub):
     original_send_sync = server.send_sync
 
     def send_sync(event, data, sid=None):
+        if event == "execution_start" and isinstance(data, dict) and data.get("prompt_id"):
+            hub.run_started[data["prompt_id"]] = time.time()  # Performance: exact start of the run
         if sid is not None and store.config.get("broadcast_execution", True):
             if event in BROADCAST_EVENTS or isinstance(event, int):
                 sid = None

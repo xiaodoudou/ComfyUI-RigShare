@@ -42,6 +42,12 @@ class FakeQueue:
     def get_current_queue_volatile(self):
         return list(self.running), list(self.pending)
 
+    history = {}
+
+    def get_history(self, prompt_id=None, max_items=None, offset=-1, map_function=None):
+        items = list(self.history.items())[-(max_items or len(self.history)):] if self.history else []
+        return {k: (map_function(v) if map_function else v) for k, v in items}
+
 
 class FakePromptServer:
     def __init__(self):

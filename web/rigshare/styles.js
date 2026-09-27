@@ -248,6 +248,24 @@ body.rs-no-manager [aria-label="ComfyUI Manager"] { display: none !important; }
 .rs-float-magnet.active { color: var(--rs-accent); }
 .rs-float-actions { display: flex; gap: 4px; padding: 0 8px 8px; flex-wrap: wrap; }
 .rs-float-actions .rs-btn { flex: 1; justify-content: center; font-size: 11px; padding: 3px 6px; }
+.rs-perf { display: flex; flex-direction: column; gap: 4px; }
+.rs-perf-run { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; border-radius: 8px; background: var(--rs-bg2); }
+.rs-perf-top { display: flex; align-items: baseline; gap: 6px; }
+.rs-perf-clock { font: 600 20px/1.1 ui-monospace, "SF Mono", Consolas, monospace; font-variant-numeric: tabular-nums; color: #60a5fa; }
+.rs-perf-eta { font-size: 13px; font-weight: 500; color: var(--rs-muted); }
+.rs-perf-over { color: #f59e0b; }
+.rs-perf-bar { height: 4px; border-radius: 2px; background: var(--rs-bg); overflow: hidden; }
+.rs-perf-bar > div { height: 100%; background: #60a5fa; transition: width .25s linear; }
+.rs-perf-bar.over > div { background: #f59e0b; }
+.rs-perf-idle { padding: 4px 0; font-size: 12px; }
+.rs-perf-head { margin-top: 4px; }
+.rs-perf-row { display: grid; grid-template-columns: 14px 1fr auto auto; gap: 6px; align-items: baseline; font-size: 12px; font-variant-numeric: tabular-nums; }
+.rs-perf-row b { font-weight: 600; }
+.rs-perf-mark.ok { color: #22c55e; } .rs-perf-mark.bad { color: #f59e0b; }
+.rs-perf-ago { font-size: 11px; }
+.rs-float .rs-perf-clock { font-size: 16px; }
+.rs-float .rs-perf-row { font-size: 11px; grid-template-columns: 12px 1fr auto; }
+.rs-float .rs-perf-ago { display: none; }
 .rs-float-body { padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 4px; }
 .rs-mini { display: grid; grid-template-columns: 46px 1fr 62px; align-items: center; gap: 6px; }
 .rs-mini-label { color: var(--rs-muted); }

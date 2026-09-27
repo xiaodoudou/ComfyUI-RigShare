@@ -1,20 +1,9 @@
-// Optional floating server monitor: a small draggable card over the canvas.
-//
-// The magnet docks it in the bottom-right corner and keeps it there: beside the
-// minimap in the graph, in the corner of the App view. Dragging it undocks it.
-// Admins also get ComfyUI's memory actions (unload models, free models & cache).
+// Floating cards over the canvas: the server monitor and performance. Docking,
+// dragging and the magnet come from FloatCard (float.js).
 
-import { h, storage } from "./ui.js";
-
-const KEY_ON = "rigshare.serverFloat";
-const KEY_POS = "rigshare.serverFloatPos";
-const KEY_MAGNET = "rigshare.serverFloatMagnet";
-const GAP = 10;
-
-// Lucide "magnet" (ISC), inline: neither PrimeIcons nor ComfyUI ships one.
-const MAGNET_SVG = `<svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"
-  stroke-linecap="round" stroke-linejoin="round"><path d="m6 15-4-4 6.75-6.77a7.79 7.79 0 0 1 11 11L13 22l-4-4 6.39-6.36a2.14 2.14 0 0 0-3-3L6 15"/>
-  <path d="m5 8 4 4"/><path d="m12 15 4 4"/></svg>`;
+import { h } from "./ui.js";
+import { FloatCard } from "./float.js";
+import { perfView } from "./perf.js";
 
 function mini(label, pct, text) {
     const p = Math.max(0, Math.min(100, pct || 0));
@@ -25,153 +14,20 @@ function mini(label, pct, text) {
         h("span", { class: "rs-mini-text" }, text));
 }
 
-/** Visible element's box, or null. */
-function box(selector) {
-    const el = document.querySelector(selector);
-    if (!el) return null;
-    const r = el.getBoundingClientRect();
-    return r.width > 0 && r.height > 0 ? r : null;
-}
-
-export class ServerWidget {
+/** Server monitor; admins also get ComfyUI's memory actions. */
+export class ServerWidget extends FloatCard {
     constructor(client, onChange, { inAppMode } = {}) {
+        super({ key: "rigshare.serverFloat", title: "Server", icon: "pi-server", inAppMode, onChange });
         this.client = client;
-        this.onChange = onChange;
-        this.inAppMode = inAppMode ?? (() => false);
-        this.enabled = storage.get(KEY_ON) === "1";
-        this.magnet = storage.get(KEY_MAGNET) !== "0"; // docked unless the user moved it
-        this.el = null;
         client.on("stats", () => this.render());
         client.on("self", () => this.render());
-        window.addEventListener("resize", () => this.dock());
-        setInterval(() => this.dock(), 500); // panels open and close, the minimap toggles...
-        if (this.enabled) this.show();
-    }
-
-    toggle() {
-        this.enabled = !this.enabled;
-        storage.set(KEY_ON, this.enabled ? "1" : null);
-        this.enabled ? this.show() : this.hide();
-        this.onChange?.();
-    }
-
-    show() {
-        if (this.el) return;
-        this.body = h("div", { class: "rs-float-body" });
-        this.magnetBtn = h("button", {
-            class: "rs-float-close rs-float-magnet", title: "Dock in the bottom-right corner",
-            onclick: () => this.setMagnet(!this.magnet),
-        });
-        this.magnetBtn.innerHTML = MAGNET_SVG;
-        const head = h("div", { class: "rs-float-head" },
-            h("i", { class: "pi pi-server" }), h("span", { class: "rs-grow" }, "Server"),
-            this.magnetBtn,
-            h("button", { class: "rs-float-close", title: "Close", onclick: () => this.toggle() }, h("i", { class: "pi pi-times" })));
-        this.actions = h("div", { class: "rs-float-actions" });
-        this.el = h("div", { class: "rs-float rs-panel-vars" }, head, this.body, this.actions);
-        let pos = null;
-        try { pos = JSON.parse(storage.get(KEY_POS)); } catch { /* default */ }
-        document.body.append(this.el);
-        this.place(pos?.x ?? window.innerWidth - 300, pos?.y ?? 70);
-        this.drag(head);
-        this.render();
-        this.paintMagnet();
-        this.dock();
-    }
-
-    hide() {
-        this.el?.remove();
-        this.el = null;
-    }
-
-    setMagnet(on) {
-        this.magnet = on;
-        storage.set(KEY_MAGNET, on ? null : "0");
-        this.paintMagnet();
-        this.dock();
-    }
-
-    paintMagnet() {
-        this.magnetBtn?.classList.toggle("active", this.magnet);
-        if (this.magnetBtn) this.magnetBtn.title = this.magnet ? "Docked: drag to undock" : "Dock in the bottom-right corner";
-    }
-
-    /** The docked position: beside the minimap in the graph, the corner of the App view. */
-    dockTarget() {
-        const w = this.el.offsetWidth;
-        const hgt = this.el.offsetHeight;
-        if (this.inAppMode()) {
-            const area = box("#linearCenterPanel") ?? { right: window.innerWidth, bottom: window.innerHeight };
-            return { x: area.right - w - GAP, y: area.bottom - hgt - GAP };
-        }
-        // ComfyUI's bottom-right group: the minimap above the zoom toolbar. Sit to
-        // their left, bottom-aligned with the toolbar, with the gap ComfyUI uses.
-        const minimap = box('[data-testid="minimap-container"]');
-        const toolbar = this.toolbarBox();
-        if (minimap || toolbar) {
-            const left = Math.min(minimap?.left ?? Infinity, toolbar?.left ?? Infinity);
-            const bottom = toolbar?.bottom ?? minimap.bottom;
-            const gap = minimap && toolbar ? Math.max(4, Math.round(toolbar.top - minimap.bottom)) : GAP;
-            return { x: left - w - gap, y: bottom - hgt };
-        }
-        const canvas = box("#graph-canvas-container") ?? box("#graph-canvas") ?? { right: window.innerWidth, bottom: window.innerHeight };
-        return { x: canvas.right - w - GAP, y: canvas.bottom - hgt - GAP };
-    }
-
-    /** The zoom toolbar holding the minimap toggle: the button's first ancestor wide enough to be the bar. */
-    toolbarBox() {
-        let el = document.querySelector('[data-testid="toggle-minimap-button"]');
-        while (el && el !== document.body) {
-            const r = el.getBoundingClientRect();
-            if (r.width >= 120 && r.height > 0 && r.height < 120) return r;
-            el = el.parentElement;
-        }
-        return null;
-    }
-
-    dock() {
-        if (!this.el || !this.magnet) return;
-        const { x, y } = this.dockTarget();
-        this.place(x, y);
-    }
-
-    place(x, y) {
-        const w = this.el.offsetWidth || 260;
-        const hgt = this.el.offsetHeight || 120;
-        x = Math.max(4, Math.min(window.innerWidth - w - 4, x));
-        y = Math.max(4, Math.min(window.innerHeight - hgt - 4, y));
-        this.el.style.left = `${Math.round(x)}px`;
-        this.el.style.top = `${Math.round(y)}px`;
-        return { x, y };
-    }
-
-    drag(handle) {
-        handle.addEventListener("pointerdown", (e) => {
-            if (e.target.closest("button")) return;
-            e.preventDefault();
-            const startX = e.clientX - this.el.offsetLeft;
-            const startY = e.clientY - this.el.offsetTop;
-            let moved = false;
-            const move = (ev) => {
-                if (!moved && this.magnet) this.setMagnet(false); // moving it by hand undocks it
-                moved = true;
-                this.place(ev.clientX - startX, ev.clientY - startY);
-            };
-            const up = () => {
-                window.removeEventListener("pointermove", move);
-                window.removeEventListener("pointerup", up);
-                if (moved) storage.set(KEY_POS, JSON.stringify({ x: this.el.offsetLeft, y: this.el.offsetTop }));
-            };
-            window.addEventListener("pointermove", move);
-            window.addEventListener("pointerup", up);
-        });
+        this.start();
     }
 
     async free(options, done) {
         try {
-            const res = await this.client.request("POST", "/api/free", options);
+            await this.client.request("POST", "/api/free", options);
             this.client.emit("toast", { severity: "success", summary: "RigShare", detail: done });
-            return res;
         } catch (e) {
             this.client.emit("toast", { severity: "error", summary: "RigShare", detail: e.message || String(e) });
         }
@@ -207,5 +63,23 @@ export class ServerWidget {
         const q = st.queue;
         if (q) rows.push(h("div", { class: "rs-mini-queue" }, q.running || q.pending ? `${q.running} running · ${q.pending} queued` : "queue idle"));
         this.body.replaceChildren(...rows);
+    }
+}
+
+/** Performance: the run in progress against its ETA, and the last runs. */
+export class PerfWidget extends FloatCard {
+    constructor(client, onChange, { inAppMode } = {}) {
+        super({ key: "rigshare.perfFloat", title: "Performance", icon: "pi-stopwatch", inAppMode, onChange });
+        this.client = client;
+        this.receivedAt = Date.now();
+        client.on("stats", () => { this.receivedAt = Date.now(); this.render(); });
+        // The clock keeps ticking between server updates.
+        setInterval(() => { if (this.el && this.client.stats?.performance?.running?.length) this.render(); }, 250);
+        this.start();
+    }
+
+    render() {
+        if (!this.el) return;
+        this.body.replaceChildren(...perfView(this.client.stats?.performance, this.receivedAt, { compact: true }));
     }
 }

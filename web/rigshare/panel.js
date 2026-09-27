@@ -2,7 +2,8 @@
 // account view (profile, password, API keys) behind the avatar button.
 
 import { h, initials, timeAgo, clock, roleChips, meter, storage, viewIcon, APP_ICON } from "./ui.js";
-import { ServerWidget } from "./server-widget.js";
+import { ServerWidget, PerfWidget } from "./server-widget.js";
+import { perfView } from "./perf.js";
 import { pickFolder } from "./files.js";
 import { isPrivatePath } from "./sync.js";
 
@@ -39,6 +40,15 @@ export class RigSharePanel {
         this.newKey = null;
 
         this.widget = new ServerWidget(client, () => this.render(), { inAppMode: () => sync.inAppMode });
+        this.perfWidget = new PerfWidget(client, () => this.render(), { inAppMode: () => sync.inAppMode });
+        this.statsAt = Date.now();
+        client.on("stats", () => { this.statsAt = Date.now(); });
+        // The Performance clock ticks between server updates (only that section redraws).
+        setInterval(() => {
+            if (this.view === "server" && this.visible && this.perfBody?.isConnected && this.client.stats?.performance?.running?.length) {
+                this.perfBody.replaceChildren(...perfView(this.client.stats.performance, this.statsAt));
+            }
+        }, 250);
 
         this.header = h("div", { class: "rs-header" });
         this.nav = h("div", { class: "rs-nav", role: "tablist" });
@@ -631,7 +641,14 @@ export class RigSharePanel {
         const q = st.queue;
         const queue = q ? h("div", { class: "rs-queue-line" }, h("i", { class: "pi pi-list" }),
             q.running || q.pending ? `${q.running} running · ${q.pending} queued` : "Queue idle") : null;
-        return [this.section("pi-server", "Server", queue, ...items, h("div", { class: "rs-actions" }, pop)),
+        const perfOn = this.perfWidget.enabled;
+        const perfPop = h("button", {
+            class: `rs-btn ${perfOn ? "active" : ""}`, title: "Show the performance card over the canvas",
+            onclick: () => this.perfWidget.toggle(),
+        }, h("i", { class: "pi pi-window-maximize" }), perfOn ? "Floating: on" : "Pop out");
+        this.perfBody = h("div", { class: "rs-perf" }, ...perfView(st.performance, this.statsAt));
+        return [this.section("pi-stopwatch", "Performance", this.perfBody, h("div", { class: "rs-actions" }, perfPop)),
+            this.section("pi-server", "Server", queue, ...items, h("div", { class: "rs-actions" }, pop)),
             gpus.length ? this.section("pi-bolt", "GPUs", ...gpus) : null].filter(Boolean);
     }
 

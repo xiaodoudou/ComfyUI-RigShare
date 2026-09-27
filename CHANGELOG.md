@@ -4,6 +4,7 @@
 
 ### Added
 
+- **Performance** in the Server tab: the run in progress against an ETA (the average of the same workflow's recent successful runs), and the last runs with who launched them and how long they took, from ComfyUI's own timestamps. It pops out as a floating card with the same magnet docking; docked cards stack in the corner
 - Floating server monitor: a magnet docks it in the bottom-right corner and keeps it there, beside the minimap in the graph, in the corner of the App view. Dragging it undocks it
 - Floating server monitor: **Unload models** and **Free models & cache** buttons for admins, like ComfyUI Manager's
 - Admin option *ComfyUI Manager in its own sidebar tab*: a **Manager** tab in the left bar (Open Manager, Custom Nodes Manager) replaces the top-bar button, for accounts with the *Manager* permission

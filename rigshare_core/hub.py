@@ -109,6 +109,7 @@ class Hub:
         self._task = None
         self.workspace = None  # set by __init__ (folders, private spaces)
         self.queue_owners = OrderedDict()  # prompt_id -> {user, name, workflow, at}
+        self.run_started = {}  # prompt_id -> time.time() of its execution_start (set by routes)
 
     # ----- lifecycle ----------------------------------------------------
 
@@ -146,6 +147,7 @@ class Hub:
             try:
                 self.stats = await loop.run_in_executor(None, collect_stats, self.server)
                 self.stats["queue_items"] = self.with_owners(self.stats.get("queue_items"))
+                self.stats["performance"] = self.performance(self.stats.pop("run_history", None), self.stats["queue_items"])
                 await self.broadcast({"type": "stats", "stats": self.stats})
             except Exception as e:
                 log.debug(f"[RigShare] stats error: {e}")
@@ -170,6 +172,32 @@ class Hub:
         if items is None:
             return None
         return [{**it, **(self.queue_owners.get(it["id"]) or {})} for it in items]
+
+    def performance(self, history, items, recent=5):
+        """The run in progress against an ETA, and the last finished runs.
+
+        ETA: the average of the recent successful runs of the same workflow.
+        """
+        if history is None:
+            return None
+        runs = self.with_owners(history)
+        now = time.time()
+        running = []
+        for item in items or []:
+            if item.get("status") != "running":
+                continue
+            started = self.run_started.setdefault(item["id"], now)
+            same = [r["ms"] for r in runs if r["result"] == "done" and item.get("workflow")
+                    and r.get("workflow") == item["workflow"]][:5]
+            running.append({"id": item["id"], "workflow": item.get("workflow"), "user": item.get("user"),
+                            "name": item.get("name"), "elapsed_ms": int((now - started) * 1000),
+                            "eta_ms": int(sum(same) / len(same)) if same else None, "runs": len(same)})
+        live = {r["id"] for r in running}
+        for prompt_id in [k for k in self.run_started if k not in live]:
+            del self.run_started[prompt_id]  # finished: its time is in ComfyUI's history now
+        keep = ("id", "ms", "end", "result", "workflow", "user", "name")
+        return {"running": running, "recent": [{k: r.get(k) for k in keep} for r in runs[:recent]],
+                "now": int(now * 1000)}
 
     def running_prompt_ids(self):
         try:
