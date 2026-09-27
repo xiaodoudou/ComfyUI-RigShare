@@ -68,37 +68,6 @@ def queue_items(server):
     return items
 
 
-RESULTS = {"execution_success": "done", "execution_error": "error", "execution_interrupted": "stopped"}
-
-
-def run_history(server, n=40):
-    """Finished runs from ComfyUI's history, newest first: [{id, ms, end, result}].
-
-    ComfyUI stamps execution_start and the final event with millisecond times, so
-    durations are exact. Only each entry's status is read (no outputs copied).
-    """
-    try:
-        history = server.prompt_queue.get_history(max_items=n, map_function=lambda p: p.get("status"))
-    except Exception:
-        return None
-    runs = []
-    for prompt_id, status in history.items():
-        start = end = result = None
-        for message in (status or {}).get("messages") or []:
-            try:
-                event, data = message[0], message[1] or {}
-            except (IndexError, TypeError):
-                continue
-            if event == "execution_start":
-                start = data.get("timestamp")
-            elif event in RESULTS:
-                end, result = data.get("timestamp"), RESULTS[event]
-        if start and end and end >= start:
-            runs.append({"id": prompt_id, "ms": end - start, "end": end, "result": result})
-    runs.sort(key=lambda r: r["end"], reverse=True)
-    return runs
-
-
 def _queue(server):
     try:
         running, pending = server.prompt_queue.get_current_queue_volatile()
@@ -125,5 +94,4 @@ def collect_stats(server=None):
     if server is not None:
         stats["queue"] = _queue(server)
         stats["queue_items"] = queue_items(server)
-        stats["run_history"] = run_history(server)
     return stats

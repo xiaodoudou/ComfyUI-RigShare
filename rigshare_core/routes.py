@@ -391,6 +391,29 @@ def setup(server, store, hub):
         log.info(f"[RigShare] {admin['username']} cleared the chat history")
         return web.json_response({"ok": True})
 
+    @routes.get("/rigshare/api/performance/history")
+    async def performance_history(request):
+        """Finished runs, newest first (?limit=, at most 500; ?workflow= to filter)."""
+        try:
+            limit = max(1, min(500, int(request.query.get("limit", 100))))
+        except ValueError:
+            return error("limit must be a number")
+        workflow = request.query.get("workflow")
+        runs = [r for r in reversed(store.runs()) if not workflow or r.get("workflow") == workflow]
+        return web.json_response({"runs": runs[:limit], "total": len(runs)})
+
+    @routes.delete("/rigshare/api/performance")
+    async def performance_clear(request):
+        """Forget one workflow's timings, so its ETA starts over."""
+        if not perms_for(request).get("edit"):
+            return error("You need the Edit permission to clear timings", 403)
+        workflow = request.query.get("workflow", "").strip()
+        if not workflow:
+            return error("Which workflow?")
+        gone = store.clear_runs(workflow)
+        log.info(f"[RigShare] {display(request)} cleared the timings of {workflow} ({gone} runs)")
+        return web.json_response({"ok": True, "cleared": gone})
+
     @routes.get("/rigshare/api/rooms")
     async def list_rooms(request):
         return web.json_response([r for r in hub.room_list() if room_access(request, hub.rooms[r["key"]])])
@@ -877,8 +900,11 @@ def setup(server, store, hub):
     original_send_sync = server.send_sync
 
     def send_sync(event, data, sid=None):
-        if event == "execution_start" and isinstance(data, dict) and data.get("prompt_id"):
-            hub.run_started[data["prompt_id"]] = time.time()  # Performance: exact start of the run
+        if event in ("execution_start", "execution_success", "execution_error", "execution_interrupted"):
+            try:
+                hub.run_event(event, data)  # Performance: time the run
+            except Exception as e:
+                log.debug(f"[RigShare] could not time the run: {e}")
         if sid is not None and store.config.get("broadcast_execution", True):
             if event in BROADCAST_EVENTS or isinstance(event, int):
                 sid = None

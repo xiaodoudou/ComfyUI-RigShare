@@ -4,7 +4,8 @@
 
 ### Added
 
-- **Performance** in the Server tab: the run in progress against an ETA (the average of the same workflow's recent successful runs), and the last runs with who launched them and how long they took, from ComfyUI's own timestamps. It pops out as a floating card with the same magnet docking; docked cards stack in the corner
+- **Performance** in the Server tab: the run in progress against an ETA (the average of the same workflow's last 5 successful runs), the last 5 runs with who launched them and how long they took, and a **History** window with every recorded run. Timings come from ComfyUI's own timestamps and are kept in `runs.json`, so they survive restarts
+- Performance pops out as a floating card: just the timer, big, with the usual time of the workflow on screen when idle, and a button to clear that workflow's timings (after a confirmation; needs *Edit*). Docked cards sit side by side in the corner, Performance to the left of Server
 - Floating server monitor: a magnet docks it in the bottom-right corner and keeps it there, beside the minimap in the graph, in the corner of the App view. Dragging it undocks it
 - Floating server monitor: **Unload models** and **Free models & cache** buttons for admins, like ComfyUI Manager's
 - Admin option *ComfyUI Manager in its own sidebar tab*: a **Manager** tab in the left bar (Open Manager, Custom Nodes Manager) replaces the top-bar button, for accounts with the *Manager* permission

@@ -109,7 +109,7 @@ class Hub:
         self._task = None
         self.workspace = None  # set by __init__ (folders, private spaces)
         self.queue_owners = OrderedDict()  # prompt_id -> {user, name, workflow, at}
-        self.run_started = {}  # prompt_id -> time.time() of its execution_start (set by routes)
+        self.run_started = {}  # prompt_id -> ms timestamp of its execution_start (set by routes)
 
     # ----- lifecycle ----------------------------------------------------
 
@@ -147,7 +147,7 @@ class Hub:
             try:
                 self.stats = await loop.run_in_executor(None, collect_stats, self.server)
                 self.stats["queue_items"] = self.with_owners(self.stats.get("queue_items"))
-                self.stats["performance"] = self.performance(self.stats.pop("run_history", None), self.stats["queue_items"])
+                self.stats["performance"] = self.performance(self.stats["queue_items"])
                 await self.broadcast({"type": "stats", "stats": self.stats})
             except Exception as e:
                 log.debug(f"[RigShare] stats error: {e}")
@@ -173,31 +173,53 @@ class Hub:
             return None
         return [{**it, **(self.queue_owners.get(it["id"]) or {})} for it in items]
 
-    def performance(self, history, items, recent=5):
-        """The run in progress against an ETA, and the last finished runs.
+    RESULTS = {"execution_success": "done", "execution_error": "error", "execution_interrupted": "stopped"}
 
-        ETA: the average of the recent successful runs of the same workflow.
+    def run_event(self, event, data):
+        """ComfyUI execution events (from routes' send_sync hook): time each run.
+
+        Both events carry ComfyUI's own millisecond timestamp, so durations are exact.
         """
-        if history is None:
-            return None
-        runs = self.with_owners(history)
-        now = time.time()
+        prompt_id = data.get("prompt_id") if isinstance(data, dict) else None
+        if not prompt_id:
+            return
+        stamp = data.get("timestamp") or int(time.time() * 1000)
+        if event == "execution_start":
+            self.run_started[prompt_id] = stamp
+        elif event in self.RESULTS and prompt_id in self.run_started:
+            start = self.run_started.pop(prompt_id)
+            owner = self.queue_owners.get(prompt_id) or {}
+            self.store.add_run({"id": prompt_id, "ms": max(0, stamp - start), "end": stamp,
+                                "result": self.RESULTS[event], "workflow": owner.get("workflow"),
+                                "user": owner.get("user"), "name": owner.get("name")})
+
+    def etas(self):
+        """Expected duration per workflow: the average of its last 5 successful runs."""
+        done = {}
+        for run in reversed(self.store.runs()):
+            wf = run.get("workflow")
+            if wf and run.get("result") == "done" and len(done.setdefault(wf, [])) < 5:
+                done[wf].append(run["ms"])
+        return {wf: {"ms": int(sum(v) / len(v)), "runs": len(v)} for wf, v in done.items() if v}
+
+    def performance(self, items, recent=5):
+        """The run in progress against its workflow's ETA, the last runs, and every ETA."""
+        now = int(time.time() * 1000)
+        etas = self.etas()
         running = []
         for item in items or []:
             if item.get("status") != "running":
                 continue
             started = self.run_started.setdefault(item["id"], now)
-            same = [r["ms"] for r in runs if r["result"] == "done" and item.get("workflow")
-                    and r.get("workflow") == item["workflow"]][:5]
+            eta = etas.get(item.get("workflow")) or {}
             running.append({"id": item["id"], "workflow": item.get("workflow"), "user": item.get("user"),
-                            "name": item.get("name"), "elapsed_ms": int((now - started) * 1000),
-                            "eta_ms": int(sum(same) / len(same)) if same else None, "runs": len(same)})
+                            "name": item.get("name"), "elapsed_ms": max(0, now - started),
+                            "eta_ms": eta.get("ms"), "runs": eta.get("runs", 0)})
         live = {r["id"] for r in running}
-        for prompt_id in [k for k in self.run_started if k not in live]:
-            del self.run_started[prompt_id]  # finished: its time is in ComfyUI's history now
-        keep = ("id", "ms", "end", "result", "workflow", "user", "name")
-        return {"running": running, "recent": [{k: r.get(k) for k in keep} for r in runs[:recent]],
-                "now": int(now * 1000)}
+        for prompt_id in [k for k in self.run_started if k not in live and now - self.run_started[k] > 86400000]:
+            del self.run_started[prompt_id]  # never finished (server restarted mid-run...)
+        return {"running": running, "recent": list(reversed(self.store.runs()[-recent:])),
+                "etas": etas, "now": now}
 
     def running_prompt_ids(self):
         try:

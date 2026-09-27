@@ -48,6 +48,8 @@ The panel uses these; they take the same session cookie or API key.
 | `GET/POST /rigshare/api/me/keys`, `DELETE /rigshare/api/me/keys/{id}` | Your API keys |
 | `GET /rigshare/api/chat?before=<seq>&limit=50` | Older chat messages, oldest first, and whether more exist |
 | `DELETE /rigshare/api/chat` | Clear the whole chat history (admin) |
+| `GET /rigshare/api/performance/history?limit=100&workflow=` | Recorded runs, newest first: duration, result, workflow, who |
+| `DELETE /rigshare/api/performance?workflow=` | Forget a workflow's timings, so its ETA starts over (*Edit*) |
 | `GET /rigshare/api/rooms` | Live workflows |
 | `GET /rigshare/api/room?key=…` | One room, with its workflow JSON |
 | `GET /rigshare/api/snapshots?room=…` | History of a room |

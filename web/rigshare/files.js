@@ -359,6 +359,16 @@ export function modal(title, icon, body, footer) {
     return { close, closed };
 }
 
+/** A yes/no question in RigShare's own modal. */
+export async function confirmModal(title, message, confirmLabel = "OK", danger = false) {
+    const ok = h("button", { class: `rs-btn ${danger ? "rs-btn-danger" : "rs-btn-primary"}` }, confirmLabel);
+    const m = modal(title, "pi-question-circle", h("p", { class: "rs-confirm-text" }, message),
+        [h("span", { class: "rs-grow" }), h("button", { class: "rs-btn rs-btn-ghost", onclick: () => m.close(false) }, "Cancel"), ok]);
+    ok.onclick = () => m.close(true);
+    setTimeout(() => ok.focus(), 30);
+    return !!(await m.closed);
+}
+
 /** A text prompt in RigShare's own modal, so it stacks above another RigShare modal. */
 export async function promptModal(title, message, value = "") {
     const input = h("input", { class: "rs-input", value, maxLength: 120 });

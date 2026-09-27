@@ -1,6 +1,6 @@
 // Floating cards over the canvas (the server monitor, performance): draggable,
-// and with a magnet that docks them in the bottom-right corner. Docked cards
-// stack upwards in the order they were created: beside the minimap and zoom
+// and with a magnet that docks them in the bottom-right corner, side by side
+// from right to left in the order they were created: beside the minimap and zoom
 // toolbar in the graph, in the corner of the App view. Dragging undocks a card.
 
 import { h, storage } from "./ui.js";
@@ -38,8 +38,9 @@ export class FloatCard {
      * key: storage prefix; title/icon: the header; inAppMode(): App view on screen.
      * Subclasses fill this.body (and this.actions) in render().
      */
-    constructor({ key, title, icon, inAppMode, onChange }) {
+    constructor({ key, title, icon, inAppMode, onChange, className = "" }) {
         this.key = key;
+        this.className = className;
         this.title = title;
         this.icon = icon;
         this.inAppMode = inAppMode ?? (() => false);
@@ -73,9 +74,10 @@ export class FloatCard {
         this.magnetBtn.innerHTML = MAGNET_SVG;
         const head = h("div", { class: "rs-float-head" },
             h("i", { class: `pi ${this.icon}` }), h("span", { class: "rs-grow" }, this.title),
+            ...this.headButtons(),
             this.magnetBtn,
             h("button", { class: "rs-float-close", title: "Close", onclick: () => this.toggle() }, h("i", { class: "pi pi-times" })));
-        this.el = h("div", { class: "rs-float rs-panel-vars" }, head, this.body, this.actions);
+        this.el = h("div", { class: `rs-float rs-panel-vars ${this.className}` }, head, this.body, this.actions);
         let pos = null;
         try { pos = JSON.parse(storage.get(`${this.key}Pos`)); } catch { /* default */ }
         document.body.append(this.el);
@@ -92,6 +94,11 @@ export class FloatCard {
     }
 
     render() { /* subclasses */ }
+
+    /** Extra title-bar buttons, before the magnet (subclasses). */
+    headButtons() {
+        return [];
+    }
 
     setMagnet(on) {
         this.magnet = on;
@@ -128,13 +135,13 @@ export class FloatCard {
         if (!this.el || !this.magnet) return;
         const a = FloatCard.anchor(this.inAppMode());
         const gap = a.gap ?? GAP;
-        // Stack above the docked cards created before this one.
-        let bottom = a.bottom;
+        // Side by side: to the left of the docked cards created before this one.
+        let right = a.right;
         for (const c of cards) {
             if (c === this) break;
-            if (c.el && c.magnet) bottom -= c.el.offsetHeight + gap;
+            if (c.el && c.magnet) right -= c.el.offsetWidth + gap;
         }
-        this.place(a.right - this.el.offsetWidth, bottom - this.el.offsetHeight);
+        this.place(right - this.el.offsetWidth, a.bottom - this.el.offsetHeight);
     }
 
     place(x, y) {

@@ -263,9 +263,15 @@ body.rs-no-manager [aria-label="ComfyUI Manager"] { display: none !important; }
 .rs-perf-row b { font-weight: 600; }
 .rs-perf-mark.ok { color: #22c55e; } .rs-perf-mark.bad { color: #f59e0b; }
 .rs-perf-ago { font-size: 11px; }
-.rs-float .rs-perf-clock { font-size: 16px; }
-.rs-float .rs-perf-row { font-size: 11px; grid-template-columns: 12px 1fr auto; }
-.rs-float .rs-perf-ago { display: none; }
+.rs-float-perf { width: 330px; }
+.rs-perf-run.big .rs-perf-clock { font-size: 30px; }
+.rs-perf-run.big .rs-perf-eta { font-size: 17px; }
+.rs-perf-run.big .rs-perf-bar { height: 6px; border-radius: 3px; }
+.rs-perf-run.idle .rs-perf-clock { color: var(--rs-muted); }
+.rs-perf-history { max-height: 60vh; overflow-y: auto; gap: 3px; }
+.rs-confirm-text { margin: 4px 0 8px; line-height: 1.5; }
+.rs-btn-danger { background: #dc2626; border-color: #dc2626; color: #fff; }
+.rs-btn-danger:hover { background: #b91c1c; }
 .rs-float-body { padding: 6px 8px 8px; display: flex; flex-direction: column; gap: 4px; }
 .rs-mini { display: grid; grid-template-columns: 46px 1fr 62px; align-items: center; gap: 6px; }
 .rs-mini-label { color: var(--rs-muted); }

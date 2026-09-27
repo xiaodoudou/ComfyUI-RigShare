@@ -605,33 +605,44 @@ def test_freeing_memory_is_admin_only(run):
     run(scenario())
 
 
-def test_performance_eta_and_recent_runs(run):
+def test_performance_run_log_eta_history_and_clear(run):
     async def scenario():
         async with rig_server() as rig:
-            from rigshare_core.stats import queue_items, run_history
-            q = rig.ps.prompt_queue
-
-            def finished(pid, start, ms, event="execution_success"):
-                q.history[pid] = {"status": {"status_str": "success", "completed": True, "messages": [
-                    ["execution_start", {"prompt_id": pid, "timestamp": start}],
-                    [event, {"prompt_id": pid, "timestamp": start + ms}]]}}
-
+            from rigshare_core.stats import queue_items
+            admin = await rig.setup_admin()
+            viewer = await rig.add_user("viewer")
+            hub, h = rig.hub, rig.http
             user = {"username": "alice", "display_name": "Alice"}
-            for i, (wf, ms, event) in enumerate([("face", 20000, "execution_success"), ("face", 30000, "execution_success"),
-                                                 ("face", 5000, "execution_interrupted"), ("video", 90000, "execution_success")]):
-                pid = f"h{i}"
-                rig.hub.record_prompt(pid, user, wf)
-                finished(pid, 1_000_000 + i * 100_000, ms, event)
-            rig.hub.record_prompt("live", user, "face")
-            q.running.append((9, "live", {"1": {}}, {}, []))
-            import time
-            rig.hub.run_started["live"] = time.time() - 12
-            rig.hub.run_started["old"] = time.time() - 999  # finished long ago
 
-            perf = rig.hub.performance(run_history(rig.ps), rig.hub.with_owners(queue_items(rig.ps)))
+            def run(pid, wf, start, ms, end_event="execution_success"):
+                hub.record_prompt(pid, user, wf)
+                hub.run_event("execution_start", {"prompt_id": pid, "timestamp": start})
+                hub.run_event(end_event, {"prompt_id": pid, "timestamp": start + ms})
+
+            run("a", "face", 1_000_000, 20000)
+            run("b", "face", 2_000_000, 30000)
+            run("c", "face", 3_000_000, 5000, "execution_interrupted")
+            run("d", "video", 4_000_000, 90000)
+            assert [(r["workflow"], r["ms"], r["result"]) for r in rig.store.runs()][-2:] == [("face", 5000, "stopped"), ("video", 90000, "done")]
+
+            # The run in progress: its workflow's ETA from the successful runs only.
+            hub.record_prompt("live", user, "face")
+            hub.run_event("execution_start", {"prompt_id": "live", "timestamp": int(__import__("time").time() * 1000) - 12000})
+            rig.ps.prompt_queue.running.append((9, "live", {"1": {}}, {}, []))
+            perf = hub.performance(hub.with_owners(queue_items(rig.ps)))
             live = perf["running"][0]
-            assert live["workflow"] == "face" and live["eta_ms"] == 25000 and live["runs"] == 2, "ETA: this workflow's successful runs"
-            assert 11000 <= live["elapsed_ms"] <= 14000
-            assert [(r["workflow"], r["ms"], r["result"]) for r in perf["recent"][:2]] == [("video", 90000, "done"), ("face", 5000, "stopped")]
-            assert "old" not in rig.hub.run_started, "finished runs are forgotten"
+            assert (live["workflow"], live["eta_ms"], live["runs"]) == ("face", 25000, 2) and 11000 <= live["elapsed_ms"] <= 15000
+            assert perf["etas"] == {"face": {"ms": 25000, "runs": 2}, "video": {"ms": 90000, "runs": 1}}
+            assert [r["id"] for r in perf["recent"]] == ["d", "c", "b", "a"], "newest first"
+
+            # Kept on disk, so it survives a restart.
+            from rigshare_core.store import Store
+            assert len(Store(rig.store.folder).runs()) == 4
+
+            hist = await (await h.get(rig.url("/rigshare/api/performance/history?workflow=face"), headers=viewer)).json()
+            assert hist["total"] == 3 and [r["id"] for r in hist["runs"]] == ["c", "b", "a"]
+            assert (await h.delete(rig.url("/rigshare/api/performance?workflow=face"), headers=viewer)).status == 403
+            r = await h.delete(rig.url("/rigshare/api/performance?workflow=face"), headers=admin)
+            assert (await r.json())["cleared"] == 3
+            assert hub.etas() == {"video": {"ms": 90000, "runs": 1}}, "the ETA starts over"
     run(scenario())

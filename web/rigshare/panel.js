@@ -3,7 +3,7 @@
 
 import { h, initials, timeAgo, clock, roleChips, meter, storage, viewIcon, APP_ICON } from "./ui.js";
 import { ServerWidget, PerfWidget } from "./server-widget.js";
-import { perfView } from "./perf.js";
+import { perfView, openHistory } from "./perf.js";
 import { pickFolder } from "./files.js";
 import { isPrivatePath } from "./sync.js";
 
@@ -40,7 +40,10 @@ export class RigSharePanel {
         this.newKey = null;
 
         this.widget = new ServerWidget(client, () => this.render(), { inAppMode: () => sync.inAppMode });
-        this.perfWidget = new PerfWidget(client, () => this.render(), { inAppMode: () => sync.inAppMode });
+        this.perfWidget = new PerfWidget(client, () => this.render(), {
+            inAppMode: () => sync.inAppMode,
+            workflow: () => { const wf = sync.store?.activeWorkflow; return wf ? sync.tabName(wf) : null; },
+        });
         this.statsAt = Date.now();
         client.on("stats", () => { this.statsAt = Date.now(); });
         // The Performance clock ticks between server updates (only that section redraws).
@@ -647,7 +650,9 @@ export class RigSharePanel {
             onclick: () => this.perfWidget.toggle(),
         }, h("i", { class: "pi pi-window-maximize" }), perfOn ? "Floating: on" : "Pop out");
         this.perfBody = h("div", { class: "rs-perf" }, ...perfView(st.performance, this.statsAt));
-        return [this.section("pi-stopwatch", "Performance", this.perfBody, h("div", { class: "rs-actions" }, perfPop)),
+        const history = h("button", { class: "rs-btn", title: "Every recorded run", onclick: () => openHistory(this.client) },
+            h("i", { class: "pi pi-history" }), "History");
+        return [this.section("pi-stopwatch", "Performance", this.perfBody, h("div", { class: "rs-actions" }, history, perfPop)),
             this.section("pi-server", "Server", queue, ...items, h("div", { class: "rs-actions" }, pop)),
             gpus.length ? this.section("pi-bolt", "GPUs", ...gpus) : null].filter(Boolean);
     }

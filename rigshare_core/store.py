@@ -446,6 +446,33 @@ class Store:
                 items.append({"id": name[:-5], **meta})
         return items
 
+    # ----- run log (Performance) -----------------------------------------
+
+    RUN_LOG_KEEP = 500
+
+    def runs(self):
+        """Finished runs, oldest first: [{id, ms, end, result, workflow, user, name}]."""
+        if not hasattr(self, "_runs"):
+            self._runs = self._read("runs.json", [])
+        return self._runs
+
+    def add_run(self, run):
+        with self._lock:
+            runs = self.runs()
+            runs.append(run)
+            del runs[:-self.RUN_LOG_KEEP]
+            self._write("runs.json", runs)
+
+    def clear_runs(self, workflow):
+        """Forget a workflow's timings (its ETA starts over); returns how many went."""
+        with self._lock:
+            runs = self.runs()
+            kept = [r for r in runs if r.get("workflow") != workflow]
+            gone = len(runs) - len(kept)
+            self._runs = kept
+            self._write("runs.json", kept)
+            return gone
+
     def add_snapshot(self, doc, author, room, room_name, label=None, kind=None):
         """``kind`` "save": taken when the file was saved; those rotate like automatic ones."""
         # Sorted by name, newest first: include microseconds so saves in the same second keep their order.

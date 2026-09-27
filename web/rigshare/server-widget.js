@@ -3,7 +3,8 @@
 
 import { h } from "./ui.js";
 import { FloatCard } from "./float.js";
-import { perfView } from "./perf.js";
+import { timerView } from "./perf.js";
+import { confirmModal } from "./files.js";
 
 function mini(label, pct, text) {
     const p = Math.max(0, Math.min(100, pct || 0));
@@ -66,20 +67,48 @@ export class ServerWidget extends FloatCard {
     }
 }
 
-/** Performance: the run in progress against its ETA, and the last runs. */
+/** Performance: only the timer (the history is in the Server tab). */
 export class PerfWidget extends FloatCard {
-    constructor(client, onChange, { inAppMode } = {}) {
-        super({ key: "rigshare.perfFloat", title: "Performance", icon: "pi-stopwatch", inAppMode, onChange });
+    constructor(client, onChange, { inAppMode, workflow } = {}) {
+        super({ key: "rigshare.perfFloat", title: "Performance", icon: "pi-stopwatch", inAppMode, onChange, className: "rs-float-perf" });
         this.client = client;
+        this.workflow = workflow ?? (() => null); // name of the workflow on screen
         this.receivedAt = Date.now();
         client.on("stats", () => { this.receivedAt = Date.now(); this.render(); });
-        // The clock keeps ticking between server updates.
-        setInterval(() => { if (this.el && this.client.stats?.performance?.running?.length) this.render(); }, 250);
+        // The clock keeps ticking between server updates; the workflow on screen may change.
+        setInterval(() => { if (this.el) this.render(); }, 250);
         this.start();
+    }
+
+    headButtons() {
+        return [h("button", {
+            class: "rs-float-close", title: "Clear the timings of the workflow on screen",
+            onclick: () => this.clear(),
+        }, h("i", { class: "pi pi-eraser" }))];
+    }
+
+    async clear() {
+        const wf = this.workflow();
+        if (!wf) return this.client.emit("toast", { severity: "info", summary: "RigShare", detail: "Open a workflow first." });
+        const runs = this.client.stats?.performance?.etas?.[wf]?.runs;
+        const ok = await confirmModal("Clear timings",
+            `Forget every recorded run of "${wf}"? Its ETA starts over${runs ? ` (it is based on ${runs} run${runs > 1 ? "s" : ""})` : ""}.`,
+            "Clear", true);
+        if (!ok) return;
+        try {
+            const res = await this.client.request("DELETE", `/rigshare/api/performance?workflow=${encodeURIComponent(wf)}`);
+            this.client.emit("toast", { severity: "success", summary: "RigShare", detail: `Cleared ${res.cleared} run${res.cleared === 1 ? "" : "s"} of "${wf}"` });
+        } catch (e) {
+            this.client.emit("toast", { severity: "error", summary: "RigShare", detail: e.message || String(e) });
+        }
     }
 
     render() {
         if (!this.el) return;
-        this.body.replaceChildren(...perfView(this.client.stats?.performance, this.receivedAt, { compact: true }));
+        const key = JSON.stringify([this.client.stats?.performance?.running, this.client.stats?.performance?.etas, this.workflow()]);
+        const running = this.client.stats?.performance?.running?.length;
+        if (!running && key === this.lastKey) return; // idle: nothing moves
+        this.lastKey = key;
+        this.body.replaceChildren(...timerView(this.client.stats?.performance, this.receivedAt, this.workflow()));
     }
 }
