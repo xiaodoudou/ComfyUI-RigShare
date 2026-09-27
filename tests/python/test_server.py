@@ -495,3 +495,30 @@ def test_queue_shows_who_launched_and_guards_cancelling(run):
             assert not rig.ps.prompt_queue.pending
             assert (await h.post(rig.url("/api/queue"), json={"clear": True}, headers=admin)).status == 200
     run(scenario())
+
+
+def test_ended_session_goes_back_to_login(run, tmp_path):
+    index = tmp_path / "index.html"
+    index.write_text("<!doctype html><html><head><title>ComfyUI</title></head><body></body></html>")
+
+    async def scenario():
+        async def page(request):
+            from aiohttp import web
+            return web.FileResponse(str(index))
+
+        async with rig_server(setup=lambda app: app.router.add_get("/", page)) as rig:
+            admin = await rig.setup_admin()
+            h = rig.http
+            r = await h.get(rig.url("/"), headers=admin)
+            text = await r.text()
+            assert r.status == 200 and "rigshare-login-watch" in text and text.index("rigshare-login-watch") < text.index("<title>")
+            assert "no-store" in r.headers.get("Cache-Control", ""), "never served from the browser cache"
+
+            # Session gone: API calls say so in a header the page watches for...
+            await h.post(rig.url("/rigshare/api/logout"), headers=admin)
+            r = await h.get(rig.url("/api/prompt"), headers={"Authorization": "Bearer nope"})
+            assert r.status == 401 and r.headers.get("X-RigShare-Login") == "required"
+            # ...and the page itself redirects to the login screen.
+            r = await h.get(rig.url("/"), headers={"Accept": "text/html"}, allow_redirects=False)
+            assert r.status == 302 and r.headers["Location"].startswith("/rigshare/login")
+    run(scenario())

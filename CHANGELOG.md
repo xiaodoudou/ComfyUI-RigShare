@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- When the session had ended (logged out elsewhere, expired, cookie cleared), a ComfyUI page already open or restored from the browser cache showed "API key missing" errors instead of going back to the login screen. The page is no longer cached, and it returns to the login screen as soon as a request says login is required
+
 ## 1.2.2 (2026-09-26)
 
 A Queue tab showing who launched what, and chat clean-up for admins.

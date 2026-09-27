@@ -17,6 +17,21 @@ from .workspace import Workspace, norm
 
 log = logging.getLogger("ComfyUI-RigShare")
 
+# Runs in the ComfyUI page before anything else: any request answered "login
+# required" (session ended, cookie cleared) sends the browser to the login page.
+LOGIN_WATCH = """<script id="rigshare-login-watch">(() => {
+  const fetch0 = window.fetch;
+  let leaving = false;
+  window.fetch = async (...args) => {
+    const res = await fetch0(...args);
+    if (res.status === 401 && !leaving && res.headers.get("X-RigShare-Login") === "required") {
+      leaving = true;
+      location.href = "/rigshare/login?next=" + encodeURIComponent(location.pathname + location.search);
+    }
+    return res;
+  };
+})();</script>"""
+
 # (method, path) prefixes that need a permission when api_protection is on.
 PROTECTED = [
     ("POST", "/prompt", "queue"),
@@ -617,6 +632,25 @@ def setup(server, store, hub):
         action = {"GET": "get", "HEAD": "get", "POST": "save", "DELETE": "delete"}.get(request.method)
         return (action, src, None) if action else None
 
+    def watch_login(response):
+        try:
+            file_path = getattr(response, "_path", None)
+            if file_path:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    page = f.read()
+            elif isinstance(response, web.Response) and response.body and "html" in (response.content_type or ""):
+                page = response.body.decode("utf-8")
+            else:
+                return response
+            if "<head>" not in page or "rigshare-login-watch" in page:
+                return response
+            page = page.replace("<head>", "<head>" + LOGIN_WATCH, 1)
+            return web.Response(text=page, content_type="text/html",
+                                headers={"Cache-Control": "no-store, must-revalidate"})
+        except Exception as e:
+            log.debug(f"[RigShare] could not add the login watch: {e}")
+            return response
+
     def api_path(request):
         return request.path[4:] if request.path.startswith("/api/") else request.path
 
@@ -729,8 +763,10 @@ def setup(server, store, hub):
                     path in ("/", "/index.html") or "text/html" in request.headers.get("Accept", ""))
                 if wants_page:
                     raise web.HTTPFound(f"/rigshare/login?next={path}")
+                # The header lets the ComfyUI page (see LOGIN_WATCH) go back to the login screen.
                 return web.json_response({"error": "RigShare: login required. API clients: send "
-                                                   "'Authorization: Bearer <api key>'."}, status=401)
+                                                   "'Authorization: Bearer <api key>'."}, status=401,
+                                         headers={"X-RigShare-Login": "required"})
         userdata = parse_userdata(request)
         if userdata and not trusted(request.remote or ""):
             refusal = check_userdata(request, *userdata)
@@ -793,6 +829,11 @@ def setup(server, store, hub):
                     response = web.json_response(filter_templates(index), headers={"Cache-Control": "no-store"})
             except Exception as e:
                 log.debug(f"[RigShare] could not filter templates: {e}")
+        # The ComfyUI page: never cached (an ended session must reach the redirect
+        # above), and watched, so a session that ends while it is open goes back
+        # to the login screen instead of showing API errors.
+        if request.method == "GET" and request.path in ("/", "/index.html") and store.config.get("require_login"):
+            response = watch_login(response)
         # Sliding session: renew the cookie JWT when it is getting old.
         cookie = request.cookies.get(COOKIE)
         if cookie and isinstance(response, web.Response) and not response.prepared:
