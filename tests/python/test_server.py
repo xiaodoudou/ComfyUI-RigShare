@@ -546,3 +546,36 @@ def test_file_changes_reach_who_can_see_them(run):
             assert await changed(b), "moves"
             await a.close(); await b.close()
     run(scenario())
+
+
+def test_other_plugins_server_routes(run):
+    async def scenario():
+        async def ok(request):
+            from aiohttp import web
+            return web.json_response({"ok": True})
+
+        def routes(app):
+            for path in ("/rgthree/api/config", "/crystools/monitor/switch", "/pixaroma/api/workflows/index",
+                         "/pixaroma/api/workflows/folder", "/pixaroma/api/fonts/list"):
+                app.router.add_route("*", path, ok)
+
+        async with rig_server(setup=routes) as rig:
+            admin = await rig.setup_admin()
+            alice = await rig.add_user("alice", edit=True, queue=True)
+            manager = await rig.add_user("mgr", manager=True)
+            h = rig.http
+
+            async def status(method, path, who):
+                return (await h.request(method, rig.url(path), headers=who)).status
+
+            # Server-wide plugin settings: like ComfyUI Manager.
+            assert await status("POST", "/rgthree/api/config", alice) == 403
+            assert await status("POST", "/crystools/monitor/switch", alice) == 403
+            assert await status("POST", "/rgthree/api/config", manager) == 200
+            assert await status("GET", "/rgthree/api/config", alice) == 200, "reading is fine"
+            # Pixaroma's workflow browser reads every folder from disk: admins only.
+            assert await status("GET", "/pixaroma/api/workflows/index", alice) == 403
+            assert await status("POST", "/pixaroma/api/workflows/folder", manager) == 403
+            assert await status("GET", "/pixaroma/api/workflows/index", admin) == 200
+            assert await status("GET", "/pixaroma/api/fonts/list", alice) == 200, "the rest of Pixaroma works"
+    run(scenario())

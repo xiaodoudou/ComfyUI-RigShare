@@ -33,6 +33,17 @@ LOGIN_WATCH = """<script id="rigshare-login-watch">(() => {
   };
 })();</script>"""
 
+# Other plugins' server routes RigShare guards: (method or None, path prefix,
+# permission, why). Settings they keep on the server apply to everyone, like
+# ComfyUI Manager, so they need the same "manager" permission; Pixaroma's workflow
+# browser reads the workflows folder straight from disk, private folders included.
+PLUGIN_RULES = [
+    ("POST", "/rgthree/api/", "manager", "changing rgthree-comfy's settings needs the 'manager' permission"),
+    ("POST", "/crystools/", "manager", "changing Crystools' settings needs the 'manager' permission"),
+    (None, "/pixaroma/api/workflows", "admin",
+     "Pixaroma's workflow browser shows every folder, private ones included; use RigShare's Files tab"),
+]
+
 # (method, path) prefixes that need a permission when api_protection is on.
 PROTECTED = [
     ("POST", "/prompt", "queue"),
@@ -798,6 +809,11 @@ def setup(server, store, hub):
                                        "details": "", "extra_info": {}}, "node_errors": {}},
                             status=403)
                     break
+        for method, prefix, need, why in PLUGIN_RULES:
+            if (method is None or request.method == method) and api_path(request).startswith(prefix):
+                if not trusted(request.remote or "") and not perms_for(request).get(need)                         and not perms_for(request).get("admin"):
+                    return web.json_response({"error": f"RigShare: {why}"}, status=403)
+                break
         refusal = await check_queue_ownership(request)
         if refusal:
             return web.json_response({"error": f"RigShare: {refusal}"}, status=403)

@@ -7,7 +7,7 @@
 | *(none)*, a viewer | Watch shared workflows, chat, follow people, open snapshots as private copies |
 | **Edit** | Change shared workflows, save or rename workflow files, take and restore snapshots, upload files |
 | **Queue** | Queue prompts, stop or remove your own runs, free memory. Stopping or removing someone else's, or clearing the queue, needs *Admin* |
-| **Manager** | Open ComfyUI Manager: install, update or remove custom nodes and models, snapshots, restart |
+| **Manager** | Open ComfyUI Manager: install, update or remove custom nodes and models, snapshots, restart. Also other plugins' top-bar buttons and their server-wide settings (rgthree-comfy, Crystools) |
 | **Admin** | Everything, plus deleting workflow files, accounts and server settings |
 
 Queueing, uploads, and saving or deleting workflow files are checked by the server too, when *Enforce permissions on the ComfyUI API* is on (the default). A viewer cannot get around it with a script.

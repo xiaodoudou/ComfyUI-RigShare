@@ -107,6 +107,10 @@ code { font-family: ui-monospace, monospace; font-size: 11px; background: var(--
 /* Comfy.org account sign-in hidden by the admin */
 body.rs-hide-comfy-account [data-testid="login-button"],
 body.rs-hide-comfy-account [data-testid="login-button-popover"] { display: none !important; }
+/* Other plugins' top-bar buttons (rgthree-comfy, Crystools...) hidden like ComfyUI Manager */
+body.rs-no-manager .rs-plugin-bar { display: none !important; }
+/* Pixaroma's workflow browser button: RigShare's Files tab replaces it */
+body.rs-hide-file-browsers .pixwb-group-btn { display: none !important; }
 /* ComfyUI Manager hidden for accounts without the "manager" permission */
 body.rs-no-manager .comfyui-button-group:has(> [title="ComfyUI Manager"]),
 body.rs-no-manager [title="ComfyUI Manager"],

@@ -866,7 +866,7 @@ export class RigSharePanel {
         line(f.broadcast, "Share execution progress", "Everyone sees progress and previews, not only whoever queued"),
         line(f.protect, "Enforce permissions on the ComfyUI API", "Blocks queueing, interrupting and uploads for users without permission"),
         line(f.hideAccount, "Hide the Comfy.org account login", "Removes ComfyUI's own sign-in button and dialog (used for paid API nodes)"),
-        line(f.hideFileTabs, "Hide ComfyUI's Workflows and Apps tabs", "RigShare's Files tab replaces them. Their shortcuts open Files instead"),
+        line(f.hideFileTabs, "Hide other workflow browsers", "ComfyUI's Workflows and Apps tabs, and Pixaroma's Workflows panel: RigShare's Files tab replaces them and their shortcuts open Files"),
         line(f.hideApiTemplates, "Hide API templates", "Removes templates that need paid API nodes from the template browser"),
         h("label", { class: "rs-label" }, "Trusted IPs / networks (skip login and checks)"), f.trusted,
         h("div", { class: "rs-row" }, h("label", { class: "rs-label rs-grow" }, "Auto snapshot every (min, 0 = off)"), f.interval),

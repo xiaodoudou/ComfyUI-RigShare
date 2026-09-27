@@ -89,6 +89,19 @@ function installManagerGuard(client) {
     client.on("self", apply);
     client.on("status", apply);
     setTimeout(apply, 2000); // Manager registers its commands during setup
+    // Other plugins put their buttons in the same place as ComfyUI Manager (just
+    // before ComfyUI's settings group in the top bar): tag them so they are hidden
+    // the same way without the "manager" permission. Their server-side settings
+    // are guarded too (PLUGIN_RULES on the server).
+    const tagPluginButtons = () => {
+        const settings = app.menu?.settingsGroup?.element;
+        const bar = settings?.parentElement;
+        if (!bar) return;
+        for (const group of bar.children) {
+            if (group !== settings && group.classList.contains("comfyui-button-group")) group.classList.add("rs-plugin-bar");
+        }
+    };
+    setInterval(tagPluginButtons, 1000);
 }
 
 // Comfy.org account: hide the top-bar sign-in button and refuse the sign-in
@@ -139,6 +152,15 @@ function installFileTabsGuard(client) {
     const apply = () => {
         if (!client.server) return; // wait for the server's settings
         const hide = hidden();
+        document.body.classList.toggle("rs-hide-file-browsers", hide);
+        // Pixaroma's workflow browser lists every folder from disk, private ones
+        // included (the server refuses it to non-admins): its shortcut opens Files.
+        const pix = (manager()?.command?.commands ?? []).find((c) => c.id === "Pixaroma.OpenWorkflowBrowser");
+        if (pix && !pix.__rigshare) {
+            const original = pix.function;
+            pix.function = (...args) => (hidden() ? openFiles() : original(...args));
+            pix.__rigshare = true;
+        }
         for (const id of COMFY_FILE_TABS) {
             const tab = tabs().find((t) => t.id === id);
             // Open workflow tabs can be shown in the Workflows sidebar tab: keep it then.
