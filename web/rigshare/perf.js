@@ -26,12 +26,13 @@ function ago(ms) {
 }
 
 /** The run in progress: clock, ETA, progress bar. `since`: ms since the stats arrived. */
-function runningBlock(run, since, { big = false } = {}) {
+function runningBlock(run, since, { big = false, workflow = null } = {}) {
     const elapsed = run.elapsed_ms + since;
     const eta = run.eta_ms;
     const over = eta && elapsed > eta;
     const left = eta ? Math.round((eta - elapsed) / 1000) : null;
-    return h("div", { class: `rs-perf-run ${big ? "big" : ""}` },
+    const mine = !!workflow && run.workflow === workflow; // the workflow on screen: yellow clock
+    return h("div", { class: `rs-perf-run ${big ? "big" : ""} ${mine ? "mine" : ""}` },
         h("div", { class: "rs-perf-top" },
             h("span", { class: "rs-perf-clock" }, duration(elapsed), eta ? h("span", { class: "rs-perf-eta" }, ` / ${duration(eta, 0)}`) : null),
             h("span", { class: "rs-grow" }),
@@ -55,11 +56,11 @@ function runRow(run, now, { date = false } = {}) {
 }
 
 /** Server tab: the run in progress and the last 5 runs. */
-export function perfView(perf, receivedAt) {
+export function perfView(perf, receivedAt, workflow = null) {
     if (!perf) return [h("p", { class: "rs-muted rs-small" }, "Waiting for the server…")];
     const since = Date.now() - receivedAt;
     const out = perf.running.length
-        ? perf.running.map((r) => runningBlock(r, since))
+        ? perf.running.map((r) => runningBlock(r, since, { workflow }))
         : [h("div", { class: "rs-perf-idle rs-muted" }, "Idle: nothing running")];
     if (perf.recent.length) {
         out.push(h("div", { class: "rs-perf-head rs-muted rs-small" }, "Last runs"));
@@ -72,7 +73,7 @@ export function perfView(perf, receivedAt) {
 export function timerView(perf, receivedAt, workflow) {
     if (!perf) return [h("p", { class: "rs-muted rs-small" }, "Waiting for the server…")];
     const since = Date.now() - receivedAt;
-    if (perf.running.length) return perf.running.map((r) => runningBlock(r, since, { big: true }));
+    if (perf.running.length) return perf.running.map((r) => runningBlock(r, since, { big: true, workflow }));
     const eta = workflow ? perf.etas?.[workflow] : null;
     return [h("div", { class: "rs-perf-run big idle" },
         h("div", { class: "rs-perf-top" },

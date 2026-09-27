@@ -49,7 +49,7 @@ export class RigSharePanel {
         // The Performance clock ticks between server updates (only that section redraws).
         setInterval(() => {
             if (this.view === "server" && this.visible && this.perfBody?.isConnected && this.client.stats?.performance?.running?.length) {
-                this.perfBody.replaceChildren(...perfView(this.client.stats.performance, this.statsAt));
+                this.perfBody.replaceChildren(...perfView(this.client.stats.performance, this.statsAt, this.perfWidget.workflow()));
             }
         }, 250);
 
@@ -649,7 +649,7 @@ export class RigSharePanel {
             class: `rs-btn ${perfOn ? "active" : ""}`, title: "Show the performance card over the canvas",
             onclick: () => this.perfWidget.toggle(),
         }, h("i", { class: "pi pi-window-maximize" }), perfOn ? "Floating: on" : "Pop out");
-        this.perfBody = h("div", { class: "rs-perf" }, ...perfView(st.performance, this.statsAt));
+        this.perfBody = h("div", { class: "rs-perf" }, ...perfView(st.performance, this.statsAt, this.perfWidget.workflow()));
         const history = h("button", { class: "rs-btn", title: "Every recorded run", onclick: () => openHistory(this.client) },
             h("i", { class: "pi pi-history" }), "History");
         return [this.section("pi-stopwatch", "Performance", this.perfBody, h("div", { class: "rs-actions" }, history, perfPop)),

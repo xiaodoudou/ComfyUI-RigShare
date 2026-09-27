@@ -254,6 +254,8 @@ body.rs-no-manager [aria-label="ComfyUI Manager"] { display: none !important; }
 .rs-perf-clock { font: 600 20px/1.1 ui-monospace, "SF Mono", Consolas, monospace; font-variant-numeric: tabular-nums; color: #60a5fa; }
 .rs-perf-eta { font-size: 13px; font-weight: 500; color: var(--rs-muted); }
 .rs-perf-over { color: #f59e0b; }
+.rs-perf-run.mine .rs-perf-clock { color: #eab308; }
+.rs-perf-run.mine .rs-perf-bar:not(.over) > div { background: #eab308; }
 .rs-perf-bar { height: 4px; border-radius: 2px; background: var(--rs-bg); overflow: hidden; }
 .rs-perf-bar > div { height: 100%; background: #60a5fa; transition: width .25s linear; }
 .rs-perf-bar.over > div { background: #f59e0b; }
