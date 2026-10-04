@@ -15,6 +15,14 @@ A custom node that turns a single ComfyUI server into a shared workspace. Everyo
 
 ---
 
+<div align="center">
+
+<img src="docs/images/live-cursors.gif" width="900" alt="Two people editing the same workflow at once, each seeing the other's named cursor and selection">
+
+<sub>Two accounts, one workflow: each person sees the other's cursor, selection and edits live.</sub>
+
+</div>
+
 ## What it does
 
 - asks everyone to sign in before ComfyUI loads, and creates the admin account on first run
