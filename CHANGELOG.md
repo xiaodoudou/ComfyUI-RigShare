@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 1.3.0 (2026-10-04)
+
+A Performance panel, a floating monitor that docks, and Manager in its own tab.
 
 ### Added
 
