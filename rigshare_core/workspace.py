@@ -20,7 +20,7 @@ import time
 from urllib.parse import unquote
 
 WORKFLOWS = "workflows"
-FOLDER_NAME_RE = re.compile(r"^[\w][\w .()-]{0,63}$")
+FOLDER_NAME_RE = re.compile(r"^(?!(?i:con|prn|aux|nul|com\d|lpt\d)(?:\.|$))\w(?:[\w .()-]{0,62}[\w()-])?\Z")  # no trailing dot/space, no Windows device names
 ROLE_RANK = {None: 0, "view": 1, "edit": 2}
 
 
@@ -35,10 +35,60 @@ def full_unquote(value):
     return value
 
 
+_WIN = os.name == "nt"
+_SHORT_NAME_RE = re.compile(r"~\d")  # Windows 8.3 alias of a long name (USERS~1)
+_case_root = None  # workflows directory used to restore on-disk casing (Windows only)
+
+
+def _on_disk_case(parts, base):
+    """Windows ignores case: map each segment to the casing it has on disk, so 'Users/Bob' is
+    judged as the same path it will open."""
+    out = []
+    for part in parts:
+        try:
+            names = os.listdir(base) if base else []
+        except OSError:
+            names = []
+        match = part if part in names else next((n for n in names if n.casefold() == part.casefold()), part)
+        out.append(match)
+        base = os.path.join(base, match) if base and match in names else None
+    return out
+
+
 def norm(path):
-    """Decode and normalise a userdata-relative path ('' for the root)."""
+    """Decode and normalise a userdata-relative path ('' for the root).
+
+    Segments Windows would read as something else are dropped, like '..': a colon (drive prefix
+    'C:', NTFS stream), a 8.3 short name, and trailing dots or spaces (Windows strips them, so
+    'users./bob' would open 'users/bob'). Casing is restored from disk on Windows. Anything that
+    still reaches the disk goes through safe_join().
+    """
     path = full_unquote(str(path or "")).replace("\\", "/")
-    return posixpath.normpath("/" + path).lstrip("/") if path else ""
+    if not path:
+        return ""
+    clean = posixpath.normpath("/" + path).lstrip("/")
+    parts = [p for p in clean.split("/")
+             if p and ":" not in p and not _SHORT_NAME_RE.search(p) and (not _WIN or p == p.rstrip(" ."))]
+    if _WIN and _case_root and parts:
+        lead = [WORKFLOWS] if parts[0].casefold() == WORKFLOWS else []
+        parts = lead + _on_disk_case(parts[len(lead):], _case_root)
+    return "/".join(parts)
+
+
+def safe_join(root, *parts):
+    """Join relative parts under root; refuse anything that resolves outside it."""
+    segments = [p for part in parts for p in str(part).replace("\\", "/").split("/") if p]
+    if any(":" in p or p in (".", "..") or (_WIN and p != p.rstrip(" .")) for p in segments):
+        raise PermissionError("Invalid path")
+    full = os.path.join(root, *segments)
+    base = os.path.realpath(root)
+    try:
+        inside = os.path.commonpath([base, os.path.realpath(full)]) == base
+    except ValueError:  # different drives
+        inside = False
+    if not inside:
+        raise PermissionError("Invalid path")
+    return full
 
 
 def has_app(doc):
@@ -56,6 +106,8 @@ class Workspace:
     def __init__(self, store, root):
         self.store = store
         self.root = root  # absolute path of the workflows directory
+        global _case_root
+        _case_root = root
         self.folders = store._read("folders.json", {})  # "shared/<name>" -> {owner, acl, created}
         os.makedirs(os.path.join(root, "users"), exist_ok=True)
         os.makedirs(os.path.join(root, "shared"), exist_ok=True)
@@ -147,7 +199,7 @@ class Workspace:
         return self.role(rel, kind, key, perms) is not None
 
     def _files(self, rel_dir):
-        base = os.path.join(self.root, *rel_dir.split("/")) if rel_dir else self.root
+        base = safe_join(self.root, rel_dir) if rel_dir else self.root
         out = []
         if not os.path.isdir(base):
             return out
@@ -198,7 +250,7 @@ class Workspace:
     # ----- browsing (Files tab) -------------------------------------------
 
     def _abs(self, rel):
-        return os.path.join(self.root, *[p for p in rel.split("/") if p])
+        return safe_join(self.root, rel)
 
     def _file_has_app(self, full):
         """Read a workflow file only when it changed since the last check."""
@@ -372,7 +424,7 @@ class Workspace:
         name = (name or "").strip()
         if not FOLDER_NAME_RE.match(name) or name in (".", ".."):
             raise ValueError("Folder names: up to 64 letters, digits, spaces and . _ - ( )")
-        path = os.path.join(self.root, "shared", name)
+        path = safe_join(self.root, "shared", name)
         if os.path.exists(path):
             raise ValueError("A folder with that name already exists")
         os.makedirs(path)
@@ -385,8 +437,8 @@ class Workspace:
         if not FOLDER_NAME_RE.match(new_name):
             raise ValueError("Folder names: up to 64 letters, digits, spaces and . _ - ( )")
         new_folder = f"shared/{new_name}"
-        src = os.path.join(self.root, *folder.split("/"))
-        dst = os.path.join(self.root, "shared", new_name)
+        src = safe_join(self.root, folder)
+        dst = safe_join(self.root, "shared", new_name)
         if os.path.exists(dst):
             raise ValueError("A folder with that name already exists")
         os.rename(src, dst)
@@ -395,7 +447,7 @@ class Workspace:
         return new_folder
 
     def delete_folder(self, folder):
-        path = os.path.join(self.root, *folder.split("/"))
+        path = safe_join(self.root, folder)
         if self._files(folder):
             raise ValueError("Move or delete the workflows inside it first")
         shutil.rmtree(path, ignore_errors=True)

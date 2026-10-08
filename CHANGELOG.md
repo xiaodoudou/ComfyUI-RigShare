@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.1 (2026-10-08)
+
+Security hardening of the workspace folder routes, mainly for Windows servers.
+
+### Fixed
+
+- Folder rename, move, delete and create (and the workspace listing) could be pointed outside the workflows folder with a Windows drive prefix (`C:`), which let `rmtree` / `rename` act on folders such as models or custom_nodes. Every path is now checked before it touches the disk: segments with a colon, backslash tricks or `..` are refused, and the resolved path must stay inside the workflows folder
+- On Windows, case and aliases of a path were not seen by the access checks: `Users/alice`, `users./alice` or `USERS~1/alice` opened Alice's private folder as if it were common, and `Shared/<restricted folder>` skipped its access list. Paths are now matched to the name on disk and trailing dots, spaces and 8.3 short names are dropped before any permission check
+- New usernames and folder names can no longer end in a dot or space, start with a dot, or be a Windows device name (`CON`, `NUL`, `COM1`...). Usernames that differ only by case count as the same name, since they share one folder on Windows. Existing accounts and folders are untouched
+
+### Added
+
+- Tests for the JWT module, the server stats, and the folder routes refusing paths outside the workspace
+
 ## 1.3.0 (2026-10-04)
 
 A Performance panel, a floating monitor that docks, and Manager in its own tab.
