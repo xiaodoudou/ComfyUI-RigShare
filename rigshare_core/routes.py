@@ -9,7 +9,7 @@ import logging
 import os
 import posixpath
 import time
-from urllib.parse import unquote
+from urllib.parse import unquote, urlsplit
 from collections import defaultdict
 
 from aiohttp import web
@@ -94,6 +94,9 @@ BROADCAST_EVENTS = {"execution_start", "execution_cached", "executing", "execute
 
 
 COOKIE = "rigshare_session"
+# The login page must not be framed by another site (clickjacking) or sniffed into another type.
+SECURITY_HEADERS = {"X-Frame-Options": "DENY", "Content-Security-Policy": "frame-ancestors 'none'",
+                    "X-Content-Type-Options": "nosniff", "Referrer-Policy": "same-origin"}
 LOGIN_PAGE = os.path.join(os.path.dirname(__file__), "login.html")
 ICON_SVG = os.path.join(os.path.dirname(os.path.dirname(__file__)), "web", "rigshare", "assets", "icon.svg")
 # Reachable without logging in.
@@ -112,7 +115,8 @@ def token_from(request):
 
 def setup(server, store, hub):
     routes = web.RouteTableDef()
-    failures = defaultdict(list)
+    failures = defaultdict(list)  # client address -> times of failed logins
+    failures_by_name = defaultdict(list)  # username -> times of failed logins
 
     def current_user(request):
         return store.user_for_token(token_from(request))
@@ -191,19 +195,30 @@ def setup(server, store, hub):
         except OSError:
             icon = ""
         page = page.replace("{{ICON_SVG}}", icon).replace("{{ICON_B64}}", base64.b64encode(icon.encode()).decode())
-        return web.Response(text=page, content_type="text/html", headers={"Cache-Control": "no-store"})
+        return web.Response(text=page, content_type="text/html", headers={"Cache-Control": "no-store", **SECURITY_HEADERS})
 
     @routes.post("/rigshare/api/login")
     async def login(request):
-        ip = request.remote or "?"
-        now = time.time()
-        failures[ip] = [t for t in failures[ip] if now - t < 60]
-        if len(failures[ip]) >= 5:
-            return error("Too many attempts, wait a minute", 429)
+        ip, now = client_ip(request) or "?", time.time()
         body = await request.json()
-        user = store.authenticate(str(body.get("username", "")).strip(), str(body.get("password", "")))
+        name = str(body.get("username", "")).strip()[:64].casefold()
+        for table in (failures, failures_by_name):  # forget old failures, so the tables stay small
+            for key in [k for k, times in table.items() if not times or now - times[-1] >= 60]:
+                del table[key]
+        recent = [t for t in failures[ip] if now - t < 60]
+        recent_name = [t for t in failures_by_name[name] if now - t < 60]
+        failures[ip], failures_by_name[name] = recent, recent_name
+        # Per address: 5 a minute. Per account: 10 a minute across all addresses, which slows
+        # guessing from many places without locking the owner out for long. Signed-in people
+        # never come through here.
+        if len(recent) >= 5 or len(recent_name) >= 10:
+            return web.json_response({"error": "Too many attempts, wait a minute"}, status=429,
+                                     headers={"Retry-After": "60"})
+        user = store.authenticate(name_raw := str(body.get("username", "")).strip(), str(body.get("password", "")))
         if not user:
             failures[ip].append(now)
+            failures_by_name[name].append(now)
+            log.warning(f"[RigShare] Failed login for '{name_raw[:32]}' from {ip}")
             return error("Invalid username or password", 401)
         token = store.create_session(user["username"])
         response = web.json_response({"token": token, "user": store.public_user(user)})
@@ -651,6 +666,50 @@ def setup(server, store, hub):
                 continue
         return False
 
+    def client_ip(request):
+        """The caller's address. Behind a trusted proxy (one of trusted_ips), the address that
+        proxy appended to X-Forwarded-For / X-Real-IP; otherwise the socket's. A proxy on the
+        same machine used to make every visitor look like 127.0.0.1, so everyone was trusted."""
+        remote = request.remote or ""
+        if not trusted(remote):
+            return remote  # an untrusted peer's forwarding headers are just claims
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[-1].strip()
+        real = request.headers.get("X-Real-IP")
+        if real:
+            return real.strip()
+        if request.headers.get("Forwarded"):
+            return ""  # a proxy we cannot read: do not trust the visitor
+        return remote
+
+    def cross_site(request):
+        """A browser sending its session cookie from another site. Browsers always send Origin on
+        cross-site writes and websockets; API clients (no cookie, usually no Origin) are not
+        affected."""
+        origin = request.headers.get("Origin")
+        if not origin or COOKIE not in request.cookies:
+            return False
+        if request.method in ("GET", "HEAD", "OPTIONS") and request.path != "/rigshare/ws":
+            return False
+        # Hostnames only: a proxy often passes Host without the port the browser used.
+        def hostname(value):
+            try:
+                return (urlsplit(value if "//" in value else "//" + value).hostname or "").lower()
+            except ValueError:
+                return ""
+        origin_host = hostname(origin)
+        allowed = {hostname(request.host)}
+        allowed.update(hostname(h.strip()) for h in (request.headers.get("X-Forwarded-Host") or "").split(",") if h.strip())
+        if origin_host and origin_host in allowed:
+            return False
+        log.warning(f"[RigShare] Refused cross-site {request.method} {request.path}: Origin {origin[:80]!r} "
+                    f"does not match Host {request.host[:80]!r}")
+        return True
+
+    def trusted_request(request):
+        return trusted(client_ip(request))
+
     def parse_userdata(request):
         """('list'|'get'|'save'|'delete'|'move', path, dest) for ComfyUI userdata calls under workflows/."""
         raw = request.raw_path.split("?", 1)[0]
@@ -706,7 +765,7 @@ def setup(server, store, hub):
         """Cancelling a queued prompt or stopping the running one: your own, unless admin."""
         if request.method != "POST" or api_path(request) not in ("/queue", "/interrupt"):
             return None
-        if trusted(request.remote or "") or perms_for(request).get("admin"):
+        if trusted_request(request) or perms_for(request).get("admin"):
             return None
         user = current_user(request)
         me = user["username"] if user else None
@@ -805,7 +864,9 @@ def setup(server, store, hub):
     @web.middleware
     async def protect(request, handler):
         path = request.path
-        if store.config.get("require_login") and path not in PUBLIC_PATHS and not trusted(request.remote or ""):
+        if cross_site(request):
+            return web.json_response({"error": "RigShare: cross-site request refused"}, status=403)
+        if store.config.get("require_login") and path not in PUBLIC_PATHS and not trusted_request(request):
             if not current_user(request):
                 wants_page = request.method == "GET" and (
                     path in ("/", "/index.html") or "text/html" in request.headers.get("Accept", ""))
@@ -816,20 +877,20 @@ def setup(server, store, hub):
                                                    "'Authorization: Bearer <api key>'."}, status=401,
                                          headers={"X-RigShare-Login": "required"})
         userdata = parse_userdata(request)
-        if userdata and not trusted(request.remote or ""):
+        if userdata and not trusted_request(request):
             refusal = check_userdata(request, *userdata)
             if refusal:
                 return web.json_response({"error": f"RigShare: {refusal}"}, status=403)
         cfg = store.config.get("api_protection", {})
         if cfg.get("enabled"):
             path = request.path[4:] if request.path.startswith("/api/") else request.path
-            if needs_manager(request.method, path) and not trusted(request.remote or ""):
+            if needs_manager(request.method, path) and not trusted_request(request):
                 if not perms_for(request).get("manager"):
                     return web.json_response({"error": "RigShare: you need the 'manager' permission to use ComfyUI Manager"},
                                              status=403)
             for method, prefix, need in PROTECTED:
                 if (not method or request.method == method) and (path == prefix or path.startswith(prefix)):
-                    if trusted(request.remote or ""):
+                    if trusted_request(request):
                         break
                     perms = perms_for(request)
                     if not any(perms.get(p) for p in need.split("|")):
@@ -841,7 +902,7 @@ def setup(server, store, hub):
                     break
         for method, prefix, need, why in PLUGIN_RULES:
             if (method is None or request.method == method) and api_path(request).startswith(prefix):
-                if not trusted(request.remote or "") and not perms_for(request).get(need)                         and not perms_for(request).get("admin"):
+                if not trusted_request(request) and not perms_for(request).get(need)                         and not perms_for(request).get("admin"):
                     return web.json_response({"error": f"RigShare: {why}"}, status=403)
                 break
         refusal = await check_queue_ownership(request)
@@ -862,7 +923,7 @@ def setup(server, store, hub):
             snapshot_saved_file(request, userdata[1], await request.read())
             await hub.files_changed(userdata[1])
         # Workflow listings only show what this person may open.
-        if userdata and userdata[0] == "list" and not trusted(request.remote or "") and hub.workspace:
+        if userdata and userdata[0] == "list" and not trusted_request(request) and hub.workspace:
             response = filter_listing(request, response, userdata[1])
         # A file moved on disk: its live room follows it.
         if userdata and userdata[0] == "move" and getattr(response, "status", 0) == 200:
