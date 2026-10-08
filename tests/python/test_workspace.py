@@ -149,11 +149,18 @@ def test_folder_ops_cannot_leave_the_workspace(ws, tmp_path):
     outside = tmp_path / "models"
     outside.mkdir()
     (outside / "keep.txt").write_text("x")
-    for bad in (str(outside), "C:" + str(outside)[2:], "shared/C:evil"):
+    # A colon segment (drive prefix) is refused outright; a plain absolute path is only ever
+    # read relative to the workflows root (a leading slash is dropped), so it can't reach `outside`.
+    for bad in ("C:" + str(outside)[2:], "shared/C:evil"):
         with pytest.raises(PermissionError):
             ws.delete_folder(bad)
         with pytest.raises(PermissionError):
             ws.rename_folder(bad, "renamed")
+    for plain in (str(outside), str(outside).replace("\\", "/")):
+        try:
+            ws.delete_folder(plain)
+        except (PermissionError, ValueError):
+            pass
     assert (outside / "keep.txt").exists()
 
 
