@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.3.3 (2026-10-08)
+
+Login and request hardening, mainly for servers behind a reverse proxy.
+
+### Fixed
+
+- A reverse proxy on the same machine (nginx, Caddy, a tunnel) made every visitor look like `127.0.0.1`, which is a trusted address by default, so login and API protection were skipped for everyone. Behind a trusted proxy, trust now follows the visitor's own address (the last `X-Forwarded-For` / `X-Real-IP` entry), and a `Forwarded` header RigShare cannot read means no trust
+- Login throttling counted only the address, so users behind one proxy locked each other out, one account could be guessed from many addresses, and the counters never shrank. It now limits per visitor address (5 failures a minute) and per account (10 a minute across all addresses), answers with `Retry-After`, and forgets old entries. People already signed in are never affected. Failed logins are logged
+
+### Added
+
+- Requests that carry the session cookie and an `Origin` from another site are refused: writes and the live connection (hostnames compared, so a proxy that drops the port or sets `X-Forwarded-Host` still works). API clients without a cookie are not affected
+- The login page is sent with `X-Frame-Options: DENY`, a `frame-ancestors 'none'` policy, `nosniff` and a same-origin referrer policy, so another site cannot frame it
+
 ## 1.3.2 (2026-10-08)
 
 Access rules tightened, following the review of the ComfyUI Manager listing.

@@ -5,6 +5,8 @@ import json
 import os
 from urllib.parse import quote
 
+from aiohttp import ClientSession
+
 from helpers import PASSWORD, enc, rig_server
 
 BASE_DOC = {"last_node_id": 2, "last_link_id": 0, "nodes": [
@@ -704,4 +706,86 @@ def test_access_is_checked_without_a_live_room(run):
             await viewer_sock.send({"type": "join", "room": open_key, "name": "common", "doc": BASE_DOC})
             assert "editing" in (await viewer_sock.until("room_denied"))["reason"]
             assert open_key not in rig.hub.rooms
+    run(scenario())
+
+
+def test_a_local_proxy_does_not_make_visitors_trusted(run):
+    async def scenario():
+        async with rig_server() as rig:
+            await rig.setup_admin()
+            rig.store.update_config({"api_protection": {"enabled": True, "trusted_ips": ["127.0.0.1"]}})
+            anon = {"Accept": "application/json"}
+            async with ClientSession() as plain:
+                # Straight from the machine itself: trusted, no login asked.
+                assert (await plain.get(rig.url("/api/prompt"), headers=anon)).status != 401
+                # The same machine relaying an outside visitor (nginx, Caddy, a tunnel): not trusted.
+                for header in ({"X-Forwarded-For": "203.0.113.9"},
+                               {"X-Forwarded-For": "10.0.0.1, 203.0.113.9"},
+                               {"X-Real-IP": "203.0.113.9"}, {"Forwarded": "for=203.0.113.9"}):
+                    r = await plain.get(rig.url("/api/prompt"), headers={**anon, **header})
+                    assert r.status == 401, header
+                # A proxy relaying someone on the trusted network keeps that trust.
+                r = await plain.get(rig.url("/api/prompt"), headers={**anon, "X-Forwarded-For": "127.0.0.1"})
+                assert r.status != 401
+    run(scenario())
+
+
+def test_login_attempts_are_throttled_per_address_and_per_account(run):
+    async def scenario():
+        async with rig_server() as rig:
+            await rig.setup_admin()
+            await rig.add_user("alice", edit=True)
+            h, login = rig.http, rig.url("/rigshare/api/login")
+            bad = {"username": "alice", "password": "wrong-password"}
+            for _ in range(5):
+                assert (await h.post(login, json=bad)).status == 401
+            r = await h.post(login, json=bad)
+            assert r.status == 429 and r.headers["Retry-After"] == "60"
+            assert (await h.post(login, json={"username": "alice", "password": PASSWORD})).status == 429, "even the right password waits"
+            # Someone already signed in is not affected: no login involved.
+            assert (await h.get(rig.url("/rigshare/api/status"), headers=rig.headers["alice"])).status == 200
+
+            # Many addresses (a trusted proxy relaying them) against one account.
+            rig.store.update_config({"api_protection": {"enabled": True, "trusted_ips": ["127.0.0.1"]}})
+            statuses = []
+            for n in range(12):
+                r = await h.post(login, json={"username": "Alice", "password": "wrong-password"},
+                                 headers={"X-Forwarded-For": f"203.0.113.{n + 1}"})
+                statuses.append(r.status)
+            # The 5 failures above already count against the account: 5 more fit, then it waits.
+            assert statuses[:5] == [401] * 5 and statuses[5:] == [429] * 7
+            r = await h.post(login, json={"username": "someone-else", "password": "x"}, headers={"X-Forwarded-For": "198.51.100.7"})
+            assert r.status == 401, "other accounts are not slowed down"
+    run(scenario())
+
+
+def test_cross_site_requests_with_a_session_cookie_are_refused(run):
+    async def scenario():
+        async with rig_server() as rig:
+            await rig.setup_admin()
+            h = rig.http
+            assert any(c.key == "rigshare_session" for c in h.cookie_jar), "logged in by cookie"
+            own = {"Origin": rig.url("")}
+            evil = {"Origin": "https://evil.example"}
+            r = await h.post(rig.url("/rigshare/api/snapshots"), json={}, headers=evil)
+            assert r.status == 403 and "cross-site" in (await r.json())["error"]
+            assert (await h.post(rig.url("/rigshare/api/snapshots"), json={}, headers=own)).status != 403
+            assert (await h.post(rig.url("/rigshare/api/snapshots"), json={})).status != 403, "no Origin: API client"
+            assert (await h.get(rig.url("/rigshare/api/status"), headers=evil)).status == 200, "reads are not writes"
+            r = await h.get(rig.url("/rigshare/ws"), headers={**evil, "Upgrade": "websocket", "Connection": "Upgrade"})
+            assert r.status == 403
+            # Behind a proxy that rewrites Host, X-Forwarded-Host names the public host.
+            r = await h.post(rig.url("/rigshare/api/snapshots"), json={},
+                             headers={"Origin": "https://comfy.example.com", "X-Forwarded-Host": "comfy.example.com"})
+            assert r.status != 403
+    run(scenario())
+
+
+def test_login_page_cannot_be_framed(run):
+    async def scenario():
+        async with rig_server() as rig:
+            r = await rig.http.get(rig.url("/rigshare/login"))
+            assert r.headers["X-Frame-Options"] == "DENY"
+            assert "frame-ancestors 'none'" in r.headers["Content-Security-Policy"]
+            assert r.headers["X-Content-Type-Options"] == "nosniff"
     run(scenario())
