@@ -666,3 +666,42 @@ def test_folder_routes_refuse_paths_outside_the_workspace(run, tmp_path):
             assert r.status in (400, 403, 404)
             assert (outside / "keep.bin").exists()
     run(scenario())
+
+
+def test_access_is_checked_without_a_live_room(run):
+    async def scenario():
+        async with rig_server() as rig:
+            await rig.setup_admin()
+            alice = await rig.add_user("alice", edit=True)
+            bob = await rig.add_user("bob", edit=True)
+            await rig.add_user("viewer")
+            h = rig.http
+            r = await h.post(rig.url("/rigshare/api/workspace/mkdir"), json={"parent": "@shared", "name": "Team"}, headers=alice)
+            assert r.status == 200
+            rig.hub.workspace.set_acl("shared/Team", {"members": {"alice": "edit"}}, "alice")
+            path = "workflows/shared/Team/plan.json"
+            doc = json.dumps({"nodes": [{"id": 1}], "links": []}).encode()
+            assert (await h.post(rig.url(f"/api/userdata/{enc(path)}"), data=doc, headers=alice)).status == 200
+            key = "file:" + path
+            assert key not in rig.hub.rooms, "nobody has it open"
+            snap_id = rig.store.list_snapshots(key)[0]["id"]
+
+            for who_, status in ((alice, 200), (bob, 404)):
+                r = await h.get(rig.url(f"/rigshare/api/snapshots?room={enc(key)}"), headers=who_)
+                assert r.status == status, who_
+                r = await h.get(rig.url(f"/rigshare/api/snapshots/{snap_id}"), headers=who_)
+                assert r.status == status, who_
+
+            # Joining a workflow you cannot open must not create (or seed) a room.
+            sock = await rig.ws("bob")
+            await sock.send({"type": "join", "room": key, "name": "plan", "doc": BASE_DOC})
+            await sock.until("room_denied")
+            assert key not in rig.hub.rooms
+
+            # A viewer cannot be the one who opens a room, so cannot seed it with their own document.
+            open_key = "file:workflows/common.json"
+            viewer_sock = await rig.ws("viewer")
+            await viewer_sock.send({"type": "join", "room": open_key, "name": "common", "doc": BASE_DOC})
+            assert "editing" in (await viewer_sock.until("room_denied"))["reason"]
+            assert open_key not in rig.hub.rooms
+    run(scenario())

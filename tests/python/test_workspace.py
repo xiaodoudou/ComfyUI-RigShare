@@ -133,9 +133,15 @@ def test_rename_user_moves_private_folder(ws):
     assert ws.folders["shared/Team"]["owner"] == "alicia"
 
 
-@pytest.mark.parametrize("raw", ["C:/models", "C:", "a/D:x/b", r"..\..\x", "c%3A%5Cmodels"])
-def test_norm_drops_drive_segments(raw):
-    assert ":" not in norm(raw) and ".." not in norm(raw).split("/")
+@pytest.mark.parametrize("raw", ["C:/models", "C:", "a/D:x/b", "c%3A%5Cmodels"])
+def test_norm_refuses_drive_segments(raw):
+    with pytest.raises(PermissionError):
+        norm(raw)
+
+
+def test_norm_still_resolves_dotdot_inside_the_tree():
+    assert norm(r"..\..\x") == "x"
+    assert norm("a/../b") == "b"
 
 
 @pytest.mark.parametrize("bad", ["C:/models", "C:", "..", "a/../..", "x:y"])
@@ -164,11 +170,11 @@ def test_folder_ops_cannot_leave_the_workspace(ws, tmp_path):
     assert (outside / "keep.txt").exists()
 
 
+@pytest.mark.skipif(os.name != "nt", reason="trailing dots, spaces and short names only alias on Windows")
 @pytest.mark.parametrize("raw", ["users./bob/a.json", "users /bob", "USERS~1/bob", "users/bob./a.json"])
-def test_norm_drops_windows_aliases(raw):
-    if os.name != "nt" and ("." in raw.split("/")[0] or " " in raw.split("/")[0]):
-        pytest.skip("trailing dots and spaces only alias on Windows")
-    assert "~1" not in norm(raw)
+def test_norm_refuses_windows_aliases(raw):
+    with pytest.raises(PermissionError):
+        norm(raw)
 
 
 @pytest.mark.skipif(os.name != "nt", reason="case-insensitive filesystem")
