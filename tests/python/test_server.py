@@ -646,3 +646,23 @@ def test_performance_run_log_eta_history_and_clear(run):
             assert (await r.json())["cleared"] == 3
             assert hub.etas() == {"video": {"ms": 90000, "runs": 1}}, "the ETA starts over"
     run(scenario())
+
+
+def test_folder_routes_refuse_paths_outside_the_workspace(run, tmp_path):
+    async def scenario():
+        async with rig_server() as rig:
+            await rig.setup_admin()
+            await rig.add_user("alice", edit=True)
+            outside = tmp_path / "models"
+            outside.mkdir()
+            (outside / "keep.bin").write_bytes(b"x")
+            H, h = rig.headers, rig.http
+            targets = [str(outside), "C:" + str(outside)[2:], r"..\..\models", "shared/C:/evil"]
+            for route, extra in (("delete-folder", {}), ("rename-folder", {"name": "x"}), ("move-folder", {"dest": "@shared"})):
+                for target in targets:
+                    r = await h.post(rig.url(f"/rigshare/api/workspace/{route}"), json={"path": target, **extra}, headers=H["alice"])
+                    assert r.status in (400, 403, 404), (route, target, r.status)
+            r = await h.post(rig.url("/rigshare/api/workspace/mkdir"), json={"parent": "C:/", "name": "x"}, headers=H["alice"])
+            assert r.status in (400, 403, 404)
+            assert (outside / "keep.bin").exists()
+    run(scenario())

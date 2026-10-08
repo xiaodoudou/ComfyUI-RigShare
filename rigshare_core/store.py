@@ -24,7 +24,7 @@ SESSION_TTL = 30 * 24 * 3600      # a login lasts at most this long
 TOKEN_TTL = 12 * 3600              # each JWT is short-lived...
 TOKEN_REFRESH = 6 * 3600           # ...and re-issued while in use once older than this
 ISSUER = "rigshare"
-USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{2,32}$")
+USERNAME_RE = re.compile(r"^(?!(?i:con|prn|aux|nul|com\d|lpt\d)(?:\.|$))[A-Za-z0-9_][A-Za-z0-9_.-]{0,30}[A-Za-z0-9_-]\Z")  # no leading/trailing dot, no Windows device names
 PERMS = ("edit", "queue", "manager", "admin")
 API_KEY_PREFIX = "rs_"
 
@@ -216,10 +216,14 @@ class Store:
         _verify_password(password, _hash_password("x", b"0" * 16))
         return None
 
+    def _name_taken(self, name, ignore=None):
+        """Names differing only by case share one folder on Windows, so they count as the same."""
+        return any(u.casefold() == name.casefold() for u in self.users if u != ignore)
+
     def create_user(self, username, password, display_name=None, perms=None):
         if not USERNAME_RE.match(username or ""):
             raise ValueError("Username must be 2-32 characters: letters, digits, _ . -")
-        if username in self.users:
+        if self._name_taken(username):
             raise ValueError("Username already exists")
         if len(password or "") < 8:
             raise ValueError("Password must be at least 8 characters")
@@ -239,7 +243,7 @@ class Store:
             raise KeyError(username)
         if not USERNAME_RE.match(new_username):
             raise ValueError("Username must be 2-32 characters: letters, digits, _ . -")
-        if new_username in self.users:
+        if self._name_taken(new_username, ignore=username):
             raise ValueError("Username already exists")
         with self._lock:
             user = self.users.pop(username)

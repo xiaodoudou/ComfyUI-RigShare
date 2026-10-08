@@ -131,3 +131,62 @@ def test_rename_user_moves_private_folder(ws):
     ws.rename_user("alice", "alicia")
     assert os.path.exists(os.path.join(ws.root, "users", "alicia", "keep.json"))
     assert ws.folders["shared/Team"]["owner"] == "alicia"
+
+
+@pytest.mark.parametrize("raw", ["C:/models", "C:", "a/D:x/b", r"..\..\x", "c%3A%5Cmodels"])
+def test_norm_drops_drive_segments(raw):
+    assert ":" not in norm(raw) and ".." not in norm(raw).split("/")
+
+
+@pytest.mark.parametrize("bad", ["C:/models", "C:", "..", "a/../..", "x:y"])
+def test_safe_join_refuses_escapes(ws, bad):
+    from rigshare_core.workspace import safe_join
+    with pytest.raises(PermissionError):
+        safe_join(ws.root, bad)
+
+
+def test_folder_ops_cannot_leave_the_workspace(ws, tmp_path):
+    outside = tmp_path / "models"
+    outside.mkdir()
+    (outside / "keep.txt").write_text("x")
+    # A colon segment (drive prefix) is refused outright; a plain absolute path is only ever
+    # read relative to the workflows root (a leading slash is dropped), so it can't reach `outside`.
+    for bad in ("C:" + str(outside)[2:], "shared/C:evil"):
+        with pytest.raises(PermissionError):
+            ws.delete_folder(bad)
+        with pytest.raises(PermissionError):
+            ws.rename_folder(bad, "renamed")
+    for plain in (str(outside), str(outside).replace("\\", "/")):
+        try:
+            ws.delete_folder(plain)
+        except (PermissionError, ValueError):
+            pass
+    assert (outside / "keep.txt").exists()
+
+
+@pytest.mark.parametrize("raw", ["users./bob/a.json", "users /bob", "USERS~1/bob", "users/bob./a.json"])
+def test_norm_drops_windows_aliases(raw):
+    if os.name != "nt" and ("." in raw.split("/")[0] or " " in raw.split("/")[0]):
+        pytest.skip("trailing dots and spaces only alias on Windows")
+    assert "~1" not in norm(raw)
+
+
+@pytest.mark.skipif(os.name != "nt", reason="case-insensitive filesystem")
+def test_case_variants_cannot_bypass_private_folders(ws):
+    touch(ws, "users/alice/a.json")
+    assert norm("Users/Alice/a.json") == "users/alice/a.json"
+    assert norm("Workflows/USERS/ALICE") == "workflows/users/alice"
+    assert ws.role(norm("USERS/alice/a.json"), "user", "bob", EDITOR) is None
+
+
+def test_name_rules():
+    from rigshare_core.workspace import FOLDER_NAME_RE
+    from rigshare_core.store import USERNAME_RE
+    for bad in ("con", "NUL", "com1.txt", "art.", "art ", "bad\n"):
+        assert not FOLDER_NAME_RE.match(bad), bad
+    for bad in ("..", "bob.", ".bob", "con", "aux", "ab\n", "a"):
+        assert not USERNAME_RE.match(bad), bad
+    for ok in ("Art (v2)", "a", "my-folder"):
+        assert FOLDER_NAME_RE.match(ok), ok
+    for ok in ("bob", "al.ice", "x_y-z", "ab"):
+        assert USERNAME_RE.match(ok), ok
