@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.3.2 (2026-10-08)
+
+Access rules tightened, following the review of the ComfyUI Manager listing.
+
+### Fixed
+
+- Snapshots of a workflow could be listed and read by an account with no access to its folder whenever nobody had that workflow open. Snapshot access now follows the workflow's folder (private and restricted shared folders included), open or not
+- Joining a live workflow seeded a new room from the caller's document before the access check. Access is checked first, and only someone who can edit the workflow can open a new room
+- Windows path segments that end in a dot or space, or use an 8.3 short name, are now refused instead of being silently dropped, so a path can no longer be classified as a different folder than the one Windows opens
+- After signing in, the login page only follows its `next` redirect when it resolves to the same origin
+
 ## 1.3.1 (2026-10-08)
 
 Security hardening of the workspace folder routes, mainly for Windows servers.

@@ -14,7 +14,7 @@ from collections import defaultdict
 
 from aiohttp import web
 
-from .workspace import Workspace, norm
+from .workspace import InvalidPath, Workspace, norm as _norm
 
 log = logging.getLogger("ComfyUI-RigShare")
 
@@ -147,6 +147,13 @@ def setup(server, store, hub):
 
     def error(message, status=400):
         return web.json_response({"error": message}, status=status)
+
+    def norm(path):
+        """workspace.norm, answering 403 for a path that is refused instead of adjusted."""
+        try:
+            return _norm(path)
+        except InvalidPath:
+            raise web.HTTPForbidden(text='{"error": "Invalid path"}', content_type="application/json")
 
     def set_cookie(request, response, token):
         secure = request.secure or request.headers.get("X-Forwarded-Proto") == "https"
@@ -580,8 +587,7 @@ def setup(server, store, hub):
         if not key:
             require_admin(request)
             return web.json_response(store.list_snapshots())
-        room = hub.rooms.get(key)
-        if room and not room_access(request, room):
+        if hub.access_for_key(key, *who(request)) is None:
             return error("No such room", 404)
         return web.json_response(store.list_snapshots(key))
 
@@ -605,8 +611,9 @@ def setup(server, store, hub):
         snap = store.get_snapshot(request.match_info["snap_id"])
         if not snap:
             return error("Not found", 404)
-        room = hub.rooms.get(snap["meta"].get("room", ""))
-        if room and not room_access(request, room):
+        # Access follows the workflow's folder whether or not anyone has it open right now.
+        room_key = snap["meta"].get("room", "")
+        if room_key and hub.access_for_key(room_key, *who(request)) is None:
             return error("Not found", 404)
         return web.json_response(snap)
 

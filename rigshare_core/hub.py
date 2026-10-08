@@ -334,8 +334,12 @@ class Hub:
         Access follows the workflow's folder (restricted shared folders), within
         the person's account permissions.
         """
-        if self.workspace and room.key.startswith("file:workflows/"):
-            return self.workspace.role(room.key[len("file:workflows/"):], kind, key, perms)
+        return self.access_for_key(room.key, kind, key, perms)
+
+    def access_for_key(self, room_key, kind, key, perms):
+        """Same as access(), from a room key: works before (or without) a live room."""
+        if self.workspace and room_key.startswith("file:workflows/"):
+            return self.workspace.role(room_key[len("file:workflows/"):], kind, key, perms)
         return "edit" if (perms.get("edit") or perms.get("admin")) else "view"
 
     def client_access(self, room, client):
@@ -556,16 +560,25 @@ class Hub:
             else:
                 room = self.rooms.get(key)
                 created = False
-                if room is None:
-                    doc = data.get("doc") if isinstance(data.get("doc"), dict) else {}
-                    room = Room(key, clean_text(data.get("name"), 120) or key, "file", doc)
-                    room.dirty = True
-                    self.rooms[key] = room
-                    created = True
-                if self.client_access(room, client) is None:
+                # Check access before anything is created: only someone who may edit the
+                # workflow can open a room and seed it with their document.
+                role = self.access_for_key(key, client.kind, client.key, client.perms)
+                if role is None:
                     client.room = None
-                    await self.send(client, {"type": "room_denied", "room": key, "name": room.name})
+                    await self.send(client, {"type": "room_denied", "room": key,
+                                             "name": room.name if room else clean_text(data.get("name"), 120) or key})
+                elif room is None and role != "edit":
+                    client.room = None
+                    await self.send(client, {"type": "room_denied", "room": key,
+                                             "name": clean_text(data.get("name"), 120) or key,
+                                             "reason": "Nobody has opened this workflow for editing yet."})
                 else:
+                    if room is None:
+                        doc = data.get("doc") if isinstance(data.get("doc"), dict) else {}
+                        room = Room(key, clean_text(data.get("name"), 120) or key, "file", doc)
+                        room.dirty = True
+                        self.rooms[key] = room
+                        created = True
                     client.room = key
                     room.updated = time.time()
                     await self.send(client, {"type": "room", "room": key, "name": room.name, "version": room.version,

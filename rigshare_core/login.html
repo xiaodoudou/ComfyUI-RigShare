@@ -84,6 +84,13 @@
   const err = document.getElementById("e");
   const btn = document.getElementById("b");
   const next = new URLSearchParams(location.search).get("next") || "/";
+  // Follow `next` only when it resolves to this same origin (blocks //host, /\host, scheme tricks).
+  const safeNext = () => {
+    try {
+      const url = new URL(next, location.origin);
+      return url.origin === location.origin ? url.pathname + url.search + url.hash : "/";
+    } catch { return "/"; }
+  };
   if (SETUP) {
     document.title = "Set up · {{SERVER_NAME}}";
     document.getElementById("sub").textContent = "First-time setup";
@@ -112,7 +119,7 @@
       if (res.status === 409) { location.reload(); return; } // someone finished setup meanwhile
       if (!res.ok) throw new Error(data.error || "Sign in failed");
       try { localStorage.setItem("rigshare.token", data.token); } catch {}
-      location.replace(next.startsWith("/") && !next.startsWith("//") ? next : "/");
+      location.replace(safeNext());
     } catch (e) {
       err.textContent = e.message;
       btn.disabled = false;

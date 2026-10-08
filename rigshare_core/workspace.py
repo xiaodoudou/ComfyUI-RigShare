@@ -55,20 +55,26 @@ def _on_disk_case(parts, base):
     return out
 
 
+class InvalidPath(PermissionError):
+    """A path Windows would read as a different one than the checks do: refused, never adjusted."""
+
+
 def norm(path):
     """Decode and normalise a userdata-relative path ('' for the root).
 
-    Segments Windows would read as something else are dropped, like '..': a colon (drive prefix
-    'C:', NTFS stream), a 8.3 short name, and trailing dots or spaces (Windows strips them, so
-    'users./bob' would open 'users/bob'). Casing is restored from disk on Windows. Anything that
-    still reaches the disk goes through safe_join().
+    A path with a segment Windows would read as something else is refused (InvalidPath), not
+    adjusted: a colon (drive prefix 'C:', NTFS stream), a 8.3 short name, or trailing dots or
+    spaces (Windows strips them, so 'users./bob' would open 'users/bob'). Casing is restored from
+    disk on Windows. Anything that still reaches the disk goes through safe_join().
     """
     path = full_unquote(str(path or "")).replace("\\", "/")
     if not path:
         return ""
     clean = posixpath.normpath("/" + path).lstrip("/")
-    parts = [p for p in clean.split("/")
-             if p and ":" not in p and not _SHORT_NAME_RE.search(p) and (not _WIN or p == p.rstrip(" ."))]
+    parts = [p for p in clean.split("/") if p]
+    for p in parts:
+        if ":" in p or (_WIN and (_SHORT_NAME_RE.search(p) or p != p.rstrip(" ."))):
+            raise InvalidPath("Invalid path")
     if _WIN and _case_root and parts:
         lead = [WORKFLOWS] if parts[0].casefold() == WORKFLOWS else []
         parts = lead + _on_disk_case(parts[len(lead):], _case_root)
