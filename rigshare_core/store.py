@@ -58,6 +58,10 @@ DEFAULT_CONFIG = {
     "snapshot_interval_sec": 300,
     "snapshot_keep": 30,
     "chat_keep": 0,  # 0 keeps the whole chat; N trims it to the last N messages at startup
+    # Unload models once the queue has been empty this many minutes (0 = off),
+    # and with auto_unload_cache also clear ComfyUI's node cache.
+    "auto_unload_minutes": 0,
+    "auto_unload_cache": False,
 }
 
 
