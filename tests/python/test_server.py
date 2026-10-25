@@ -650,6 +650,51 @@ def test_performance_run_log_eta_history_and_clear(run):
     run(scenario())
 
 
+def test_auto_unload_after_idle(run):
+    async def scenario():
+        async with rig_server() as rig:
+            import time
+            admin = await rig.setup_admin()
+            hub, queue = rig.hub, rig.ps.prompt_queue
+
+            def run(pid):
+                hub.run_event("execution_start", {"prompt_id": pid, "timestamp": 1})
+                hub.run_event("execution_success", {"prompt_id": pid, "timestamp": 2})
+
+            r = await rig.http.patch(rig.url("/rigshare/api/config"), json={"auto_unload_minutes": 15}, headers=admin)
+            assert (await r.json())["auto_unload_minutes"] == 15
+            hub.auto_unload(time.time() + 3600)
+            assert queue.flags == {}, "nothing ran since startup, nothing to unload"
+
+            run("a")
+            now = time.time()
+            hub.auto_unload(now + 14 * 60)
+            assert queue.flags == {}, "not idle long enough"
+            queue.pending.append((1, "b", {}, {}, []))
+            hub.auto_unload(now + 3600)
+            assert queue.flags == {}, "a waiting prompt keeps models loaded and restarts the clock"
+            queue.pending.clear()
+            hub.auto_unload(now + 3600 + 14 * 60)
+            assert queue.flags == {}
+            hub.auto_unload(now + 3600 + 15 * 60)
+            assert queue.flags == {"unload_models": True}
+            queue.flags.clear()
+            hub.auto_unload(now + 4 * 3600)
+            assert queue.flags == {}, "once per idle period"
+
+            await rig.http.patch(rig.url("/rigshare/api/config"), json={"auto_unload_cache": True}, headers=admin)
+            run("c")
+            hub.auto_unload(time.time() + 15 * 60)
+            assert queue.flags == {"unload_models": True, "free_memory": True}
+
+            queue.flags.clear()
+            await rig.http.patch(rig.url("/rigshare/api/config"), json={"auto_unload_minutes": 0}, headers=admin)
+            run("d")
+            hub.auto_unload(time.time() + 24 * 3600)
+            assert queue.flags == {}, "0 turns it off"
+    run(scenario())
+
+
 def test_folder_routes_refuse_paths_outside_the_workspace(run, tmp_path):
     async def scenario():
         async with rig_server() as rig:

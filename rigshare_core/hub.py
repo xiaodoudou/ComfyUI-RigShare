@@ -110,6 +110,8 @@ class Hub:
         self.workspace = None  # set by __init__ (folders, private spaces)
         self.queue_owners = OrderedDict()  # prompt_id -> {user, name, workflow, at}
         self.run_started = {}  # prompt_id -> ms timestamp of its execution_start (set by routes)
+        self.last_activity = time.time()  # last run event or busy queue, for auto unload
+        self.models_idle = True  # nothing to unload until a run loads models
 
     # ----- lifecycle ----------------------------------------------------
 
@@ -135,6 +137,7 @@ class Hub:
                     if expiry > 0 and now - room.updated > expiry and not self.members(room.key):
                         self.rooms.pop(room.key, None)
                         self.store.delete_room(room.key)
+                self.auto_unload(now)
             except Exception as e:
                 log.error(f"[RigShare] housekeeping error: {e}")
 
@@ -183,6 +186,8 @@ class Hub:
         prompt_id = data.get("prompt_id") if isinstance(data, dict) else None
         if not prompt_id:
             return
+        self.last_activity = time.time()
+        self.models_idle = False
         stamp = data.get("timestamp") or int(time.time() * 1000)
         if event == "execution_start":
             self.run_started[prompt_id] = stamp
@@ -220,6 +225,31 @@ class Hub:
             del self.run_started[prompt_id]  # never finished (server restarted mid-run...)
         return {"running": running, "recent": list(reversed(self.store.runs()[-recent:])),
                 "etas": etas, "now": now}
+
+    def auto_unload(self, now):
+        """Unload models once nothing has run for ``auto_unload_minutes`` (0 = off).
+
+        Sets the same queue flags as ComfyUI's /free, so its prompt worker does the
+        unloading between runs. Happens once per idle period.
+        """
+        try:
+            minutes = float(self.store.config.get("auto_unload_minutes") or 0)
+        except (TypeError, ValueError):
+            minutes = 0
+        if minutes <= 0 or self.models_idle or not self.server:
+            return
+        queue = self.server.prompt_queue
+        running, pending = queue.get_current_queue_volatile()
+        if running or pending:
+            self.last_activity = now
+            return
+        if now - self.last_activity < minutes * 60:
+            return
+        queue.set_flag("unload_models", True)
+        if self.store.config.get("auto_unload_cache"):
+            queue.set_flag("free_memory", True)
+        self.models_idle = True
+        log.info(f"[RigShare] Unloaded models after {minutes:g} min without runs.")
 
     def running_prompt_ids(self):
         try:

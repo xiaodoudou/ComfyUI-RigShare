@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.4.0 (2026-10-25)
+
+Models can leave the GPU on their own once the server is idle.
+
+### Added
+
+- Admin option *Unload models after idle*: once nothing has run for that many minutes, RigShare unloads the models, as the *Unload models* button does, so the VRAM is free for other programs. Off by default (`auto_unload_minutes`: `0`). A run or a waiting prompt restarts the clock, and it unloads once per idle period
+- With *Also clear the cache when unloading* (`auto_unload_cache`), it clears ComfyUI's cache too, like *Free models & cache*: RAM is freed as well, but the next run computes every node again
+
 ## 1.3.3 (2026-10-08)
 
 Login and request hardening, mainly for servers behind a reverse proxy.

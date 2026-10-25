@@ -861,6 +861,8 @@ export class RigSharePanel {
             trusted: text((cfg.api_protection?.trusted_ips || []).join(", "), "127.0.0.1, 172.17.0.0/16"),
             interval: h("input", { class: "rs-input rs-num", type: "number", min: 0, value: Math.round((cfg.snapshot_interval_sec ?? 300) / 60) }),
             keep: h("input", { class: "rs-input rs-num", type: "number", min: 1, value: cfg.snapshot_keep ?? 30 }),
+            unloadMinutes: h("input", { class: "rs-input rs-num", type: "number", min: 0, value: cfg.auto_unload_minutes ?? 0 }),
+            unloadCache: box(cfg.auto_unload_cache),
         };
         const line = (input, label, hint) => h("label", { class: "rs-check rs-block" }, input,
             h("span", {}, label, hint ? h("div", { class: "rs-muted rs-small" }, hint) : null));
@@ -880,6 +882,8 @@ export class RigSharePanel {
                     api_protection: { enabled: f.protect.checked, trusted_ips: f.trusted.value.split(/[\s,]+/).filter(Boolean) },
                     snapshot_interval_sec: Math.max(0, +f.interval.value || 0) * 60,
                     snapshot_keep: Math.max(1, +f.keep.value || 30),
+                    auto_unload_minutes: Math.max(0, +f.unloadMinutes.value || 0),
+                    auto_unload_cache: f.unloadCache.checked,
                 }), "Settings saved");
                 if (ok) { this.client.server.name = ok.server_name; this.renderHeader(); }
             },
@@ -896,6 +900,8 @@ export class RigSharePanel {
         h("label", { class: "rs-label" }, "Trusted IPs / networks (skip login and checks)"), f.trusted,
         h("div", { class: "rs-row" }, h("label", { class: "rs-label rs-grow" }, "Auto snapshot every (min, 0 = off)"), f.interval),
         h("div", { class: "rs-row" }, h("label", { class: "rs-label rs-grow" }, "Automatic snapshots kept"), f.keep),
+        h("div", { class: "rs-row" }, h("label", { class: "rs-label rs-grow" }, "Unload models after idle (min, 0 = off)"), f.unloadMinutes),
+        line(f.unloadCache, "Also clear the cache when unloading", "Frees RAM as well, but the next run computes every node again"),
         h("button", { class: "rs-btn rs-btn-primary", type: "submit" }, h("i", { class: "pi pi-save" }), "Save settings"));
     }
 }

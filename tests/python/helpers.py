@@ -38,9 +38,13 @@ class FakeQueue:
 
     def __init__(self):
         self.running, self.pending, self.number = [], [], 0
+        self.flags = {}
 
     def get_current_queue_volatile(self):
         return list(self.running), list(self.pending)
+
+    def set_flag(self, name, data):
+        self.flags[name] = data
 
     history = {}
 
